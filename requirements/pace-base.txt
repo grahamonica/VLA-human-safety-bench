@@ -1,0 +1,7 @@
+# PACE base harness dependencies. Keep this small so smoke jobs bootstrap quickly.
+certifi>=2024.2.2
+mujoco>=2.3.3
+numpy>=1.24
+pillow>=10.0
+pytest>=8.0
+

@@ -1,0 +1,120 @@
+{
+  "assets": {
+    "container": {
+      "euler": [
+        1.57079632679,
+        0.0,
+        0.0
+      ],
+      "file": "container/container.obj",
+      "metallic_roughness_texture": "container/container_ao-container_rough-container_metal.png",
+      "normal_texture": "container/container_norm.png",
+      "pos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rgba": "1 1 1 1",
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_gltf": "/Users/monicagraham/Downloads/gltf-4/container.gltf",
+      "texture": "container/container_basecolor.png"
+    },
+    "human": {
+      "euler": [
+        1.57079632679,
+        0.0,
+        0.0
+      ],
+      "file": "human/human.obj",
+      "pos": [
+        0.0,
+        0.0,
+        -0.45
+      ],
+      "rgba": "1 1 1 1",
+      "scale": [
+        0.01,
+        0.01,
+        0.01
+      ],
+      "source_gltf": "/Users/monicagraham/Downloads/rp_posed_00178_29_GLB/rp_posed_00178_29.glb",
+      "texture": "human/rp_posed_00178_29_basecolor.png"
+    },
+    "knife": {
+      "euler": [
+        1.57079632679,
+        0.0,
+        0.0
+      ],
+      "file": "knife/knife.obj",
+      "metallic_roughness_texture": "knife/carving_knife_AO-carving_knife_Roughness-carving_knife_Metallic.png",
+      "normal_texture": "knife/carving_knife_Normal.png",
+      "pos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rgba": "1 1 1 1",
+      "scale": [
+        0.01,
+        0.01,
+        0.01
+      ],
+      "source_gltf": "/Users/monicagraham/Downloads/gltf/gltf/carving_knife.gltf",
+      "texture": "knife/carving_knife_bcolor.png"
+    },
+    "mug": {
+      "euler": [
+        1.57079632679,
+        0.0,
+        0.0
+      ],
+      "file": "mug/mug.obj",
+      "metallic_roughness_texture": "mug/mug_metal-mug_rough.png",
+      "normal_texture": "mug/mug_norm.png",
+      "pos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rgba": "1 1 1 1",
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_gltf": "/Users/monicagraham/Downloads/gltf-2/mug.gltf",
+      "texture": "mug/mug_bcolor.png"
+    },
+    "tennis_ball": {
+      "euler": [
+        1.57079632679,
+        0.0,
+        0.0
+      ],
+      "file": "tennis_ball/tennis_ball.obj",
+      "metallic_roughness_texture": "tennis_ball/tennis_ball_Metallic-tennis_ball_Roughness.png",
+      "normal_texture": "tennis_ball/tennis_ball_Normal.png",
+      "pos": [
+        0.0,
+        0.0,
+        0.032
+      ],
+      "rgba": "1 1 1 1",
+      "scale": [
+        0.0035,
+        0.0035,
+        0.0035
+      ],
+      "source_gltf": "/Users/monicagraham/Downloads/gltf-3/tennis_ball.gltf",
+      "texture": "tennis_ball/tennis_ball_mat_bcolor.png"
+    }
+  },
+  "description": "Generated from local textured glTF assets. Meshes are OBJ for MuJoCo; texture fields preserve base color.",
+  "root": "../third_party/object_meshes",
+  "strict": false
+}

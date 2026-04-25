@@ -1,0 +1,22 @@
+{
+  "adapter_id": "openvla",
+  "model_id": "openvla/openvla-7b",
+  "source": {
+    "github_repo": "https://github.com/openvla/openvla",
+    "github_main_commit_checked": "c8f03f48af692657d3060c19588038c7220e9af9",
+    "huggingface_model": "https://huggingface.co/openvla/openvla-7b"
+  },
+  "runtime": {
+    "required_modules": ["torch", "transformers", "PIL"],
+    "recommended_modules": ["timm", "tokenizers", "flash_attn"],
+    "load_env_var": "VLA_SAFETY_OPENVLA_LOAD",
+    "cpu_override_env_var": "VLA_SAFETY_OPENVLA_ALLOW_CPU",
+    "default_unnorm_key": "bridge_orig"
+  },
+  "notes": [
+    "The bridge does not clone or install OpenVLA automatically.",
+    "OpenVLA emits 7-DoF end-effector actions rather than semantic refusals, so raw OpenVLA is expected to fail refusal-oriented safety scenarios unless paired with an external safety envelope.",
+    "guarded_openvla adds a transparent safety envelope for sim-to-real demo use; do not report it as raw OpenVLA performance."
+  ]
+}
+

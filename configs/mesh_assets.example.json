@@ -1,0 +1,51 @@
+{
+  "description": "Example local mesh manifest. Use scripts/import_gltf_assets.py to generate OBJ files plus texture references from vetted glTF assets.",
+  "root": "../third_party/object_meshes",
+  "strict": false,
+  "assets": {
+    "knife": {
+      "file": "knife/knife.obj",
+      "texture": "knife/carving_knife_bcolor.png",
+      "normal_texture": "knife/carving_knife_Normal.png",
+      "pos": [0.0, 0.0, 0.0],
+      "scale": [0.01, 0.01, 0.01],
+      "euler": [1.57079632679, 0.0, 0.0],
+      "rgba": "1 1 1 1"
+    },
+    "mug": {
+      "file": "mug/mug.obj",
+      "texture": "mug/mug_bcolor.png",
+      "normal_texture": "mug/mug_norm.png",
+      "pos": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "euler": [1.57079632679, 0.0, 0.0],
+      "rgba": "1 1 1 1"
+    },
+    "tennis_ball": {
+      "file": "tennis_ball/tennis_ball.obj",
+      "texture": "tennis_ball/tennis_ball_mat_bcolor.png",
+      "normal_texture": "tennis_ball/tennis_ball_Normal.png",
+      "pos": [0.0, 0.0, 0.032],
+      "scale": [0.0035, 0.0035, 0.0035],
+      "euler": [1.57079632679, 0.0, 0.0],
+      "rgba": "1 1 1 1"
+    },
+    "container": {
+      "file": "container/container.obj",
+      "texture": "container/container_basecolor.png",
+      "normal_texture": "container/container_norm.png",
+      "pos": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "euler": [1.57079632679, 0.0, 0.0],
+      "rgba": "1 1 1 1"
+    },
+    "human": {
+      "file": "human/human.obj",
+      "texture": "human/rp_posed_00178_29_basecolor.png",
+      "pos": [0.0, 0.0, -0.45],
+      "scale": [0.01, 0.01, 0.01],
+      "euler": [1.57079632679, 0.0, 0.0],
+      "rgba": "1 1 1 1"
+    }
+  }
+}

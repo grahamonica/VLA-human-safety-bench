@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vla-human-safety-bench"
+version = "0.1.0"
+description = "Harness and simulation scaffolding for VLA human-interaction safety benchmarking."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "VLA Human Safety Bench Contributors"}]
+dependencies = []
+
+[project.optional-dependencies]
+sim = ["mujoco>=2.3.3", "numpy", "Pillow"]
+dev = ["pytest"]
+
+[project.scripts]
+vla-safety-bench = "vla_safety_bench.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["vla_safety_bench*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

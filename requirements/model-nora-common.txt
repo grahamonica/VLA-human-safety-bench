@@ -1,0 +1,7 @@
+# NORA/NORA-1.5 repo requirements are installed from the checked-out repo.
+# These are harness-side runtime dependencies used by both adapters.
+pillow>=10.0
+torch>=2.2.0
+transformers>=4.40.0
+accelerate
+

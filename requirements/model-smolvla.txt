@@ -1,0 +1,3 @@
+# Hugging Face docs recommend LeRobot with the SmolVLA extra.
+lerobot[smolvla]
+

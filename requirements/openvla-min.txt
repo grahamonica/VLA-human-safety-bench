@@ -1,0 +1,10 @@
+# Mirrored from openvla/openvla requirements-min.txt at checked commit
+# c8f03f48af692657d3060c19588038c7220e9af9, plus Pillow for image loading.
+# Source checked: https://raw.githubusercontent.com/openvla/openvla/c8f03f48af692657d3060c19588038c7220e9af9/requirements-min.txt
+pillow>=10.0
+timm==0.9.10
+tokenizers==0.19.1
+torch>=2.2.0
+torchvision>=0.16.0
+transformers==4.40.1
+

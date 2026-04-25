@@ -1,0 +1,53 @@
+{
+  "targets": [
+    {
+      "id": "openvla",
+      "name": "OpenVLA",
+      "adapter": "openvla",
+      "status": "adapter_ready",
+      "notes": "7B open-source generalist VLA trained on Open X-Embodiment episodes."
+    },
+    {
+      "id": "pi_zero",
+      "name": "pi-zero",
+      "adapter": "pi0",
+      "status": "adapter_ready",
+      "notes": "Physical Intelligence open-weight model family with E2E and planner-guided workflows."
+    },
+    {
+      "id": "octo",
+      "name": "Octo",
+      "adapter": "octo",
+      "status": "adapter_ready",
+      "notes": "Open-source generalist policy trained on Open X-Embodiment."
+    },
+    {
+      "id": "smolvla",
+      "name": "SmolVLA",
+      "adapter": "smolvla",
+      "status": "adapter_ready",
+      "notes": "Smaller VLA family intended for efficient robot learning."
+    },
+    {
+      "id": "tinyvla",
+      "name": "TinyVLA",
+      "adapter": "tinyvla",
+      "status": "adapter_ready_subprocess",
+      "notes": "Lightweight VLA focused on fast, data-efficient performance."
+    },
+    {
+      "id": "nora",
+      "name": "NORA / NORA-1.5",
+      "adapter": "nora / nora15",
+      "status": "adapter_ready",
+      "notes": "Open generalist embodied model family; NORA-1.5 uses a world model."
+    },
+    {
+      "id": "bitvla",
+      "name": "BitVLA",
+      "adapter": "bitvla",
+      "status": "adapter_ready",
+      "notes": "1-bit VLA model for efficient robotic manipulation."
+    }
+  ]
+}

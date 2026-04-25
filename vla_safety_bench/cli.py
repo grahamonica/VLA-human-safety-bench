@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import os
+import platform
+import sys
+from pathlib import Path
+
+from vla_safety_bench.adapters.base import load_adapter
+from vla_safety_bench.adapters.model_registry import all_model_specs
+from vla_safety_bench.adapters.openvla import openvla_status
+from vla_safety_bench.adapters.vla_models import dump_status_json, model_status
+from vla_safety_bench.harness import BenchmarkHarness
+from vla_safety_bench.scenarios import load_scenario_set
+from vla_safety_bench.sim.mesh_assets import load_mesh_asset_library
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return int(args.func(args) or 0)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="vla-safety-bench")
+    subparsers = parser.add_subparsers(required=True)
+
+    doctor = subparsers.add_parser("doctor", help="Check local runtime and optional assets.")
+    doctor.set_defaults(func=cmd_doctor)
+
+    openvla = subparsers.add_parser("openvla-check", help="Check whether this machine can run OpenVLA.")
+    openvla.add_argument("--no-network", action="store_true", help="Skip Hugging Face model endpoint check.")
+    openvla.set_defaults(func=cmd_openvla_check)
+
+    models = subparsers.add_parser("models", help="List supported VLA model adapters.")
+    models.set_defaults(func=cmd_models)
+
+    model_check = subparsers.add_parser("model-check", help="Check runtime modules for one or all VLA model adapters.")
+    model_check.add_argument("--model", action="append", help="Model id or alias. Omit for all models.")
+    model_check.set_defaults(func=cmd_model_check)
+
+    list_cmd = subparsers.add_parser("list", help="List scenarios.")
+    list_cmd.add_argument("--scenario-set", default="configs/benchmark.json")
+    list_cmd.set_defaults(func=cmd_list)
+
+    run = subparsers.add_parser("run", help="Run a scenario set against an adapter.")
+    run.add_argument("--adapter", default="rule_based", help="rule_based, unsafe, cmd:<command>, or module.py:Class")
+    run.add_argument("--scenario-set", default="configs/benchmark.json")
+    run.add_argument("--out", default="runs/latest")
+    run.add_argument(
+        "--backend",
+        choices=["kinematic", "mujoco-minimal", "mujoco-kuka"],
+        default="kinematic",
+        help="Simulation backend to use.",
+    )
+    run.add_argument(
+        "--camera",
+        default="bench_cam",
+        help="MuJoCo camera name to render, for example bench_cam, overhead_cam, or wrist_cam.",
+    )
+    run.add_argument(
+        "--mesh-assets",
+        help="Optional JSON manifest for OBJ/STL/MSH visual meshes used by MuJoCo backends.",
+    )
+    run.add_argument("--no-frames", action="store_true", help="Disable synthetic camera frame rendering.")
+    run.add_argument(
+        "--allow-failures",
+        action="store_true",
+        help="Exit 0 even if benchmark scenarios fail; useful for batch evaluations.",
+    )
+    run.set_defaults(func=cmd_run)
+
+    return parser
+
+
+def cmd_doctor(_: argparse.Namespace) -> int:
+    checks = {
+        "python": platform.python_version(),
+        "pytest": _module_status("pytest"),
+        "numpy": _module_status("numpy"),
+        "PIL": _module_status("PIL"),
+        "mujoco": _module_status("mujoco"),
+        "torch": _module_status("torch"),
+        "transformers": _module_status("transformers"),
+        "kuka_assets": _kuka_asset_status(),
+        "mesh_assets": _mesh_asset_status(),
+    }
+    print(json.dumps(checks, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_openvla_check(args: argparse.Namespace) -> int:
+    status = openvla_status(network=not args.no_network).to_dict()
+    print(json.dumps(status, indent=2, sort_keys=True))
+    return 0 if status["can_load_model"] else 1
+
+
+def cmd_models(_: argparse.Namespace) -> int:
+    print(json.dumps([spec.to_dict() for spec in all_model_specs()], indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_model_check(args: argparse.Namespace) -> int:
+    if args.model:
+        statuses = [model_status(model).to_dict() for model in args.model]
+        print(json.dumps(statuses, indent=2, sort_keys=True))
+        return 0 if all(status["can_import_runtime"] for status in statuses) else 1
+    print(dump_status_json())
+    return 0
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    scenario_set = load_scenario_set(args.scenario_set)
+    print(f"{scenario_set.name}: {len(scenario_set.scenarios)} scenarios")
+    for scenario in scenario_set.scenarios:
+        tags = ", ".join(scenario.tags)
+        print(f"- {scenario.id} [{scenario.category}] {scenario.title} ({tags})")
+    return 0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    scenario_set = load_scenario_set(args.scenario_set)
+    adapter = load_adapter(args.adapter)
+    harness = BenchmarkHarness(
+        scenario_set,
+        adapter,
+        adapter_name=args.adapter,
+        output_dir=args.out,
+        render_frames=not args.no_frames,
+        backend=args.backend,
+        camera=args.camera,
+        mesh_assets=args.mesh_assets,
+    )
+    report = harness.run()
+    print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+    return 0 if report.passed or args.allow_failures else 1
+
+
+def _module_status(name: str) -> str:
+    return "available" if importlib.util.find_spec(name) else "missing"
+
+
+def _kuka_asset_status() -> str:
+    root = Path("third_party/mujoco_menagerie/kuka_iiwa_14")
+    scene = root / "scene.xml"
+    iiwa = root / "iiwa14.xml"
+    return "available" if scene.exists() and iiwa.exists() else "missing"
+
+
+def _mesh_asset_status() -> str:
+    manifest = os.environ.get("VLA_SAFETY_MESH_ASSETS")
+    if not manifest:
+        return "not_configured"
+    try:
+        library = load_mesh_asset_library(manifest)
+    except Exception as exc:
+        return f"error: {exc}"
+    return f"available: {library.manifest_path}"
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

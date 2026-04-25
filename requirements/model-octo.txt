@@ -1,0 +1,6 @@
+# Octo's repo requirements are installed from the checked-out repo. This file
+# only captures runtime pieces used by the harness wrapper.
+numpy
+pillow
+jax[cuda12]
+

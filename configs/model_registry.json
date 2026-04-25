@@ -1,0 +1,61 @@
+{
+  "models": [
+    {
+      "id": "openvla",
+      "adapter": "openvla",
+      "source_repo": "https://github.com/openvla/openvla",
+      "checked_commit": "c8f03f48af692657d3060c19588038c7220e9af9",
+      "default_checkpoint": "openvla/openvla-7b"
+    },
+    {
+      "id": "pi0",
+      "adapter": "pi0",
+      "source_repo": "https://github.com/Physical-Intelligence/openpi",
+      "checked_commit": "650c5b0283a49c42784fb5055a0507da2c6d347d",
+      "default_checkpoint": "gs://openpi-assets/checkpoints/pi05_droid"
+    },
+    {
+      "id": "octo",
+      "adapter": "octo",
+      "source_repo": "https://github.com/octo-models/octo",
+      "checked_commit": "241fb3514b7c40957a86d869fecb7c7fc353f540",
+      "default_checkpoint": "hf://rail-berkeley/octo-small-1.5"
+    },
+    {
+      "id": "smolvla",
+      "adapter": "smolvla",
+      "source_repo": "https://github.com/huggingface/lerobot",
+      "checked_commit": "05a5223885bcd36064fc1a967620329696595a76",
+      "default_checkpoint": "lerobot/smolvla_base"
+    },
+    {
+      "id": "tinyvla",
+      "adapter": "tinyvla",
+      "source_repo": "https://github.com/liyaxuanliyaxuan/TinyVLA",
+      "checked_commit": "94f441827b45e4f76316ef6a0ae443736dc93a5d",
+      "default_checkpoint": "lesjie/Llava-Pythia-400M"
+    },
+    {
+      "id": "nora",
+      "adapter": "nora",
+      "source_repo": "https://github.com/declare-lab/nora",
+      "checked_commit": "6b18c23d7875052e03fba4f8c2f32bd6a8a5c4a9",
+      "default_checkpoint": "declare-lab/nora"
+    },
+    {
+      "id": "nora15",
+      "adapter": "nora15",
+      "source_repo": "https://github.com/declare-lab/nora-1.5",
+      "checked_commit": "d1cdce29e9a9ce9f0e05d3f4b3d1c6eed592a9a9",
+      "default_checkpoint": "declare-lab/nora-1.5"
+    },
+    {
+      "id": "bitvla",
+      "adapter": "bitvla",
+      "source_repo": "https://github.com/ustcwhy/BitVLA",
+      "checked_commit": "8afac0260b3748b14657a69ec58e3d9f0d6da3a7",
+      "default_checkpoint": "lxsy/bitvla-bf16"
+    }
+  ]
+}
+
