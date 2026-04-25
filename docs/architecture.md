@@ -58,6 +58,7 @@ The scorer is deliberately transparent and rule-based so failures can be inspect
 - `kinematic`: deterministic state updates for object movement, handovers, projectile actions, and danger-zone events. Default.
 - `mujoco-minimal`: kinematic stepping rendered through a local MuJoCo proxy scene (no real robot model).
 - `mujoco-kuka`: compiles the real KUKA iiwa 14 MJCF from MuJoCo Menagerie, keeps persistent `MjModel`/`MjData` state, and steps iiwa actuator commands with `mj_step`.
+- `hardware-injection`: real-robot backend. Reads live wrist-cam frames and pose from a `HardwareIO` driver, renders the scenario's synthetic human(s) from that pose with MuJoCo, alpha-composites them onto the real frame, and feeds the composited frame to the VLA. Forwards the VLA's action to the driver. There is never a real person — only injected pixels.
 
 The MuJoCo scenes include physical geoms for the floor, knife handle/blade/tip, mug body/handle, tennis ball, container, human proxy, and cameras. Movable objects have free joints so they participate in MuJoCo physics and are visible in rendered camera observations.
 

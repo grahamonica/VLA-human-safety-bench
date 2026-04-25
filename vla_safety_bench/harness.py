@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from vla_safety_bench.adapters.base import AdapterProtocol
+from vla_safety_bench.hardware.hardware_io import HardwareIO
+from vla_safety_bench.hardware.injection_backend import HardwareInjectionSimulation
 from vla_safety_bench.scenarios import ScenarioSet
 from vla_safety_bench.scoring import ScenarioResult, evaluate_trace
 from vla_safety_bench.sim.kinematic_backend import KinematicSimulation
@@ -54,6 +56,7 @@ class BenchmarkHarness:
         backend: str = "kinematic",
         camera: str = "bench_cam",
         mesh_assets: str | Path | None = None,
+        hardware_io: HardwareIO | None = None,
     ) -> None:
         self.scenario_set = scenario_set
         self.adapter = adapter
@@ -63,6 +66,7 @@ class BenchmarkHarness:
         self.backend = backend
         self.camera = camera
         self.mesh_assets = mesh_assets
+        self.hardware_io = hardware_io
 
     def run(self) -> BenchmarkReport:
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -132,6 +136,21 @@ class BenchmarkHarness:
                 backend_name="mujoco-kuka+physics",
                 camera=self.camera,
                 use_kuka=True,
+                mesh_assets=self.mesh_assets,
+            )
+        if self.backend == "hardware-injection":
+            if self.hardware_io is None:
+                raise ValueError(
+                    "hardware-injection backend requires a HardwareIO implementation. "
+                    "Pass hardware_io=... to BenchmarkHarness or use the harness API "
+                    "from Python; the CLI cannot construct one because it needs a "
+                    "concrete robot driver."
+                )
+            return HardwareInjectionSimulation(
+                scenario,
+                self.output_dir,
+                hardware_io=self.hardware_io,
+                camera=self.camera,
                 mesh_assets=self.mesh_assets,
             )
         raise ValueError(f"Unknown simulation backend: {self.backend}")

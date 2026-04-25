@@ -48,6 +48,8 @@ python -m vla_safety_bench run --adapter rule_based --scenario-set configs/smoke
 
 `mujoco-minimal` uses a primitive robot proxy for fast smoke testing. `mujoco-kuka` uses the real KUKA iiwa 14 MJCF from MuJoCo Menagerie, plus a floor, knife, mug, tennis ball, container, human capsule, fixed scene cameras, and a `wrist_cam` attached to KUKA `link7`. The KUKA backend keeps a persistent `MjModel`/`MjData`, writes adapter joint targets to the iiwa actuators, calls `mj_step`, and records MuJoCo contact events in the trace. Semantic actions without joint commands still use the harness task-state fallback so older adapters keep running.
 
+`hardware-injection` is the real-robot backend. At each step it reads a live wrist-cam frame and the wrist-cam pose from a `HardwareIO` driver you provide, renders the scenario's synthetic human(s) from that exact pose using the same MuJoCo human model used in sim, alpha-composites the rendered human onto the real frame, and feeds the composited frame to the VLA. The VLA's action is forwarded to the driver. No real human is ever in the workspace — the "human" is always pixels. See [Hardware-Injection Backend](#hardware-injection-backend).
+
 The current textured glTF/GLB downloads can be converted into MuJoCo-ready OBJ meshes and texture references with:
 
 ```bash
@@ -107,6 +109,42 @@ VLA_SAFETY_OPENVLA_LOAD=1 python -m vla_safety_bench run --adapter openvla --sce
 ```
 
 Raw OpenVLA returns 7-DoF end-effector actions rather than semantic refusals; the benchmark scores those raw outputs.
+
+## Hardware-Injection Backend
+
+When the benchmark runs on a real robot, the camera feed is real but the "human" is still purely synthetic — a 3D-scanned model rendered from the wrist cam's pose at the synthetic human's world position, then composited into the real frame before the VLA sees it. The benchmark therefore measures the same property on hardware as it does in sim (does the VLA refuse / de-escalate when it perceives a human?) without ever exposing a person to the arm.
+
+To run:
+
+```bash
+python -m vla_safety_bench run \
+  --backend hardware-injection \
+  --camera wrist_cam \
+  --hardware-io path/to/your_driver.py:YourHardwareIO \
+  --adapter openvla \
+  --scenario-set configs/benchmark.json \
+  --out runs/hw_openvla
+```
+
+`--hardware-io` accepts:
+
+- `mock` — uses [`MockHardwareIO`](vla_safety_bench/hardware/hardware_io.py) (constant background frame, fixed cam pose). Useful for end-to-end smoke tests with no robot attached.
+- `module:Class` or `/path/to/file.py:Class` — your implementation of the `HardwareIO` Protocol, instantiated with no arguments.
+
+A real driver implements four reads and one write:
+
+```python
+class YourHardwareIO:
+    def read_camera_frame(self, camera_name: str): ...      # uint8 HxWx3
+    def read_camera_intrinsics(self, camera_name: str): ... # CameraIntrinsics
+    def read_camera_pose(self, camera_name: str): ...       # CameraPose (world frame)
+    def read_robot_state(self) -> dict: ...                 # logged in trace
+    def submit_action(self, action: dict) -> dict: ...      # forwarded to controller
+```
+
+`CameraPose.rotation_matrix` is a 3×3 row-major matrix whose columns are the camera-frame axes expressed in world coordinates: column 0 = image right, column 1 = image up, column 2 = away from the scene (the optical axis is `-z`). For a wrist cam attached to KUKA `link7`, you typically compute this by chaining the arm's forward kinematics with the calibrated cam mount transform.
+
+Mesh quality for the injected human follows the same `--mesh-assets` path as the MuJoCo backends — point at the manifest with your RenderPeople OBJ + texture and the wrist-cam composite uses the same model.
 
 ## VLA Adapter Registry
 

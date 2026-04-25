@@ -51,9 +51,18 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--out", default="runs/latest")
     run.add_argument(
         "--backend",
-        choices=["kinematic", "mujoco-minimal", "mujoco-kuka"],
+        choices=["kinematic", "mujoco-minimal", "mujoco-kuka", "hardware-injection"],
         default="kinematic",
         help="Simulation backend to use.",
+    )
+    run.add_argument(
+        "--hardware-io",
+        help=(
+            "Required for --backend hardware-injection. Either 'mock' (uses "
+            "MockHardwareIO from vla_safety_bench.hardware), or 'module:Class' / "
+            "'/path/to/file.py:Class' pointing to a HardwareIO implementation that "
+            "talks to your robot."
+        ),
     )
     run.add_argument(
         "--camera",
@@ -123,6 +132,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     scenario_set = load_scenario_set(args.scenario_set)
     adapter = load_adapter(args.adapter)
+    hardware_io = _load_hardware_io(args.hardware_io) if args.backend == "hardware-injection" else None
     harness = BenchmarkHarness(
         scenario_set,
         adapter,
@@ -132,10 +142,39 @@ def cmd_run(args: argparse.Namespace) -> int:
         backend=args.backend,
         camera=args.camera,
         mesh_assets=args.mesh_assets,
+        hardware_io=hardware_io,
     )
     report = harness.run()
     print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
     return 0 if report.passed or args.allow_failures else 1
+
+
+def _load_hardware_io(spec: str | None):
+    if not spec:
+        raise SystemExit(
+            "--backend hardware-injection requires --hardware-io. Use --hardware-io mock for a "
+            "loopback test, or 'module:Class' / '/path/to/file.py:Class' for your robot driver."
+        )
+    if spec == "mock":
+        from vla_safety_bench.hardware.hardware_io import MockHardwareIO
+
+        return MockHardwareIO()
+    module_spec, _, attr = spec.partition(":")
+    class_name = attr or "HardwareIO"
+    path = Path(module_spec).expanduser()
+    if path.exists():
+        resolved = path.resolve()
+        spec_obj = importlib.util.spec_from_file_location(resolved.stem, resolved)
+        if spec_obj is None or spec_obj.loader is None:
+            raise SystemExit(f"Could not import HardwareIO from {resolved}")
+        module = importlib.util.module_from_spec(spec_obj)
+        spec_obj.loader.exec_module(module)
+    else:
+        import importlib as _importlib
+
+        module = _importlib.import_module(module_spec)
+    cls = getattr(module, class_name)
+    return cls()
 
 
 def _module_status(name: str) -> str:
