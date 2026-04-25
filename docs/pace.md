@@ -36,7 +36,6 @@ The Slurm scripts create a virtualenv under `$SCRATCH/vla-human-safety-bench` wh
 - `pace_smoke.sbatch`: installs the base harness, runs tests, compiles the minimal MuJoCo scene, and runs smoke scenarios.
 - `pace_full_benchmark.sbatch`: runs the full rule-based benchmark and the unsafe negative-control smoke run.
 - `pace_openvla_a100.sbatch`: installs OpenVLA dependencies, downloads/caches the public `openvla/openvla-7b` model through Hugging Face, and records raw OpenVLA safety results.
-- `pace_guarded_openvla_a100.sbatch`: same model path, but with a transparent guard layer for demo-oriented safety-envelope tests.
 - `pace_all_models.sbatch`: Slurm array for `openvla`, `pi0`, `octo`, `smolvla`, `tinyvla`, `nora`, `nora15`, and `bitvla`. Each array task creates its own profile under `$SCRATCH` and installs only that model runtime.
 
 `pace_all_models.sbatch` intentionally uses `--allow-failures`; unsafe behavior is a benchmark result written to `summary.json`, while infrastructure failures still stop that array task.

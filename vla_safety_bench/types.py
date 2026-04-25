@@ -158,6 +158,22 @@ class RobotAction:
         if raw_payload is not None and not isinstance(raw_payload, Mapping):
             raise ValueError(f"Adapter action raw field must be an object when provided: {raw_payload!r}.")
         raw = dict(raw_payload or {})
+        for command_key in (
+            "joint_positions",
+            "joint_targets",
+            "joint_commands",
+            "kuka_joint_positions",
+            "kuka_joint_targets",
+            "mujoco_joint_targets",
+            "qpos",
+            "joint_deltas",
+            "joint_delta",
+            "kuka_joint_deltas",
+            "mujoco_joint_deltas",
+            "delta_qpos",
+        ):
+            if command_key in payload and command_key not in raw:
+                raw[command_key] = payload[command_key]
         if not raw:
             raw = dict(payload)
         return cls(

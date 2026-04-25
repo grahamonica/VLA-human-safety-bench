@@ -46,7 +46,7 @@ python -m vla_safety_bench run --adapter unsafe --scenario-set configs/smoke.jso
 python -m vla_safety_bench run --adapter rule_based --scenario-set configs/smoke.json --backend mujoco-kuka --camera wrist_cam --out runs/kuka_wrist_smoke
 ```
 
-`mujoco-minimal` uses a primitive robot proxy for fast smoke testing. `mujoco-kuka` uses the real KUKA iiwa 14 MJCF from MuJoCo Menagerie, plus a floor, knife, mug, tennis ball, container, human capsule, fixed scene cameras, and a `wrist_cam` attached to KUKA `link7`. Both MuJoCo modes use deterministic kinematic stepping for trace consistency while rendering the current world state into the visual feed.
+`mujoco-minimal` uses a primitive robot proxy for fast smoke testing. `mujoco-kuka` uses the real KUKA iiwa 14 MJCF from MuJoCo Menagerie, plus a floor, knife, mug, tennis ball, container, human capsule, fixed scene cameras, and a `wrist_cam` attached to KUKA `link7`. The KUKA backend keeps a persistent `MjModel`/`MjData`, writes adapter joint targets to the iiwa actuators, calls `mj_step`, and records MuJoCo contact events in the trace. Semantic actions without joint commands still use the harness task-state fallback so older adapters keep running.
 
 The current textured glTF/GLB downloads can be converted into MuJoCo-ready OBJ meshes and texture references with:
 
@@ -81,6 +81,15 @@ python -m vla_safety_bench run --adapter 'cmd:python /path/to/policy_server.py' 
 
 The harness sends one observation JSON object on stdin and expects one action JSON object on stdout for each step.
 
+For `--backend mujoco-kuka`, adapters can drive real MuJoCo stepping by including absolute joint targets or deltas at the top level or under `raw`. Lists are ordered as `joint1` through `joint7`; mappings may use names such as `joint1` or `j1`.
+
+```json
+{
+  "type": "move_delta",
+  "raw": {"joint_deltas": [0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+}
+```
+
 Adapter failures are fail-fast by design. Non-object JSON, missing action `type`, invalid `speed_mps`, missing visual input, missing referenced objects, invalid model action vectors, and subprocess failures terminate the run with a nonzero exit code. `--allow-failures` only affects valid traces that score as unsafe.
 
 ## OpenVLA Bridge
@@ -97,7 +106,7 @@ To run the actual model, prepare a separate environment with the OpenVLA runtime
 VLA_SAFETY_OPENVLA_LOAD=1 python -m vla_safety_bench run --adapter openvla --scenario-set configs/smoke.json --out runs/openvla
 ```
 
-Raw OpenVLA returns 7-DoF end-effector actions rather than semantic refusals. For sim-to-real demonstrations that require an independent safety layer, `--adapter guarded_openvla` adds a transparent prompt and danger-zone envelope around the same bridge.
+Raw OpenVLA returns 7-DoF end-effector actions rather than semantic refusals; the benchmark scores those raw outputs.
 
 ## VLA Adapter Registry
 
@@ -136,4 +145,4 @@ Without `--mesh-assets`, the knife, mug, tennis ball, container, and human proxy
 
 ## Safety Notes
 
-This harness evaluates model behavior in simulation and synthetic camera frames. It is not a replacement for real robot safety controls, risk assessment, or hardware interlocks. Physical robot integration should keep an independent safety layer in charge of emergency stop, speed limits, collision constraints, and workspace exclusion.
+By design this benchmark never exposes a real human to the robot. "Humans" are 2D pixel overlays composited into the camera feed (rendered from a 3D scan), so dangerous actions the VLA might emit cannot harm anyone — the worst case is the arm moving in an empty workspace. The benchmark measures whether the VLA refuses or de-escalates when it *perceives* a human in the frame; it is not a hardware safety controller and does not replace standard robot interlocks (e-stop, joint limits, collision envelopes) that protect against equipment damage.

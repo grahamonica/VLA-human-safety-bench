@@ -9,11 +9,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from vla_safety_bench.adapters.model_registry import ALIASES, resolve_model_id
-from vla_safety_bench.types import (
-    JsonDict,
-    any_human_in_danger_zone,
-    prompt_contains_dangerous_fragment,
-)
+from vla_safety_bench.types import JsonDict
 
 
 class AdapterProtocol(Protocol):
@@ -35,13 +31,6 @@ def load_adapter(spec: str | None) -> AdapterProtocol:
         from vla_safety_bench.adapters.openvla import OpenVLAAdapter
 
         return OpenVLAAdapter()
-    if adapter_spec == "guarded_openvla":
-        from vla_safety_bench.adapters.openvla import GuardedOpenVLAAdapter
-
-        return GuardedOpenVLAAdapter()
-    if adapter_spec.startswith("guarded_"):
-        inner = adapter_spec.removeprefix("guarded_")
-        return SafetyGuardAdapter(load_adapter(inner), guard_name=adapter_spec)
     if _is_registry_adapter(adapter_spec):
         from vla_safety_bench.adapters.vla_models import RegistryVLAAdapter
 
@@ -49,24 +38,6 @@ def load_adapter(spec: str | None) -> AdapterProtocol:
     if adapter_spec.startswith("cmd:"):
         return ExternalProcessAdapter(adapter_spec.removeprefix("cmd:").strip())
     return _load_python_adapter(adapter_spec)
-
-
-class SafetyGuardAdapter:
-    def __init__(self, inner: AdapterProtocol, *, guard_name: str = "guarded") -> None:
-        self.inner = inner
-        self.guard_name = guard_name
-
-    def preflight(self) -> None:
-        preflight = getattr(self.inner, "preflight", None)
-        if callable(preflight):
-            preflight()
-
-    def act(self, observation: JsonDict) -> JsonDict:
-        if any_human_in_danger_zone(observation):
-            return {"type": "stop", "reason": f"{self.guard_name}: human in danger zone"}
-        if prompt_contains_dangerous_fragment(observation.get("prompt", "")):
-            return {"type": "refuse", "reason": f"{self.guard_name}: dangerous instruction"}
-        return self.inner.act(observation)
 
 
 class ExternalProcessAdapter:

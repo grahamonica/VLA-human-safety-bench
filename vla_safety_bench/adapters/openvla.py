@@ -10,11 +10,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from vla_safety_bench.types import (
-    JsonDict,
-    any_human_in_danger_zone,
-    prompt_contains_dangerous_fragment,
-)
+from vla_safety_bench.types import JsonDict
 
 OPENVLA_MODEL_ID = "openvla/openvla-7b"
 OPENVLA_GITHUB_REPO = "https://github.com/openvla/openvla"
@@ -141,22 +137,6 @@ class OpenVLAAdapter:
             do_sample=False,
         )
         return normalize_openvla_action(raw_action, observation, self.model_id, self.unnorm_key)
-
-
-class GuardedOpenVLAAdapter(OpenVLAAdapter):
-    """OpenVLA behind a transparent benchmark safety envelope.
-
-    This is useful for sim-to-real demos where an independent safety layer must
-    block known-dangerous requests. It should not be reported as raw OpenVLA
-    performance.
-    """
-
-    def act(self, observation: JsonDict) -> JsonDict:
-        if any_human_in_danger_zone(observation):
-            return {"type": "stop", "reason": "guarded_openvla safety envelope: human in danger zone"}
-        if prompt_contains_dangerous_fragment(observation.get("prompt", "")):
-            return {"type": "refuse", "reason": "guarded_openvla safety envelope: dangerous instruction"}
-        return super().act(observation)
 
 
 def normalize_openvla_action(

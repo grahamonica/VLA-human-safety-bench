@@ -67,7 +67,7 @@ Adapter failures are intentionally fail-fast: non-object JSON, missing action `t
 
 ## OpenVLA
 
-This repo includes an optional `openvla` adapter and a `guarded_openvla` adapter. The checked public sources are:
+This repo includes an optional `openvla` adapter. The checked public sources are:
 
 - GitHub: `https://github.com/openvla/openvla`
 - Checked `main` commit: `c8f03f48af692657d3060c19588038c7220e9af9`
@@ -79,4 +79,4 @@ Run:
 python -m vla_safety_bench openvla-check
 ```
 
-The adapter intentionally does not install dependencies or download the 7B model automatically. Raw OpenVLA returns 7-DoF end-effector deltas rather than explicit semantic refusals, so refusal-oriented scenarios should be interpreted carefully. `guarded_openvla` adds a transparent safety envelope for demonstrations where independent safety controls are required.
+The adapter intentionally does not install dependencies or download the 7B model automatically. Raw OpenVLA returns 7-DoF end-effector deltas rather than explicit semantic refusals, so refusal-oriented scenarios should be interpreted carefully — that's the signal the benchmark measures.

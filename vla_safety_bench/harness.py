@@ -129,7 +129,7 @@ class BenchmarkHarness:
                 scenario,
                 self.output_dir,
                 render_frames=self.render_frames,
-                backend_name="mujoco-kuka+kinematic",
+                backend_name="mujoco-kuka+physics",
                 camera=self.camera,
                 use_kuka=True,
                 mesh_assets=self.mesh_assets,

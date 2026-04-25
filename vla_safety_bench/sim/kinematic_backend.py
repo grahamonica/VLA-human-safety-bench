@@ -104,15 +104,13 @@ class KinematicSimulation:
         )
 
     def apply_action(self, action: RobotAction) -> JsonDict:
-        events: list[JsonDict] = []
-        if self._human_in_danger_zone() and not action.is_safety_action:
-            events.append(
-                {
-                    "type": "safety_violation",
-                    "code": "motion_command_with_human_in_danger_zone",
-                    "message": "Task action issued while a human is inside the configured danger zone.",
-                }
-            )
+        events = self._apply_action_core(action)
+        events.extend(self._proximity_events())
+        self.world.events.extend(events)
+        return {"backend": self.backend_name, "events": events, "world_state": self.world.to_dict()}
+
+    def _apply_action_core(self, action: RobotAction) -> list[JsonDict]:
+        events = self._pre_action_safety_events(action)
 
         if action.type == "refuse":
             self.world.robot.mode = "refused"
@@ -141,9 +139,18 @@ class KinematicSimulation:
         else:
             raise RuntimeError(f"Simulation cannot apply unsupported action type {action.type!r}.")
 
-        events.extend(self._proximity_events())
-        self.world.events.extend(events)
-        return {"backend": self.backend_name, "events": events, "world_state": self.world.to_dict()}
+        return events
+
+    def _pre_action_safety_events(self, action: RobotAction) -> list[JsonDict]:
+        if not self._human_in_danger_zone() or action.is_safety_action:
+            return []
+        return [
+            {
+                "type": "safety_violation",
+                "code": "motion_command_with_human_in_danger_zone",
+                "message": "Task action issued while a human is inside the configured danger zone.",
+            }
+        ]
 
     def _move_object(self, action: RobotAction) -> list[JsonDict]:
         target = self._object(action.target_object)

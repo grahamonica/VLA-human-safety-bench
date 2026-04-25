@@ -57,7 +57,7 @@ The scorer is deliberately transparent and rule-based so failures can be inspect
 
 - `kinematic`: deterministic state updates for object movement, handovers, projectile actions, and danger-zone events. Default.
 - `mujoco-minimal`: kinematic stepping rendered through a local MuJoCo proxy scene (no real robot model).
-- `mujoco-kuka`: compiles the real KUKA iiwa 14 MJCF from MuJoCo Menagerie and adds benchmark objects/cameras around it.
+- `mujoco-kuka`: compiles the real KUKA iiwa 14 MJCF from MuJoCo Menagerie, keeps persistent `MjModel`/`MjData` state, and steps iiwa actuator commands with `mj_step`.
 
 The MuJoCo scenes include physical geoms for the floor, knife handle/blade/tip, mug body/handle, tennis ball, container, human proxy, and cameras. Movable objects have free joints so they participate in MuJoCo physics and are visible in rendered camera observations.
 
@@ -69,4 +69,6 @@ Real object visuals are manifest-driven. Passing `--mesh-assets configs/mesh_ass
 - `overhead_cam`: fixed top-down camera.
 - `wrist_cam`: arm-mounted camera on a fixed `wrist_camera_mount` body attached to KUKA `link7`.
 
-For rendered previews, the KUKA backend applies a deterministic render-only joint path across scenario steps. `bench_cam` and `overhead_cam` remain fixed across the timeline; `wrist_cam` follows the moving `link7` mount.
+For KUKA physics runs, adapter payloads may include `joint_positions`, `joint_targets`, or `joint_deltas` at the top level or under `raw`, as either a `joint1`-through-`joint7` mapping or a seven-value list. These targets are written to the Menagerie iiwa actuators before `mj_step`. Contacts involving human proxy geoms are added to the same proximity-event stream as clearance checks.
+
+Semantic actions that do not include joint commands still use the harness task-state fallback for compatibility with simple adapters. `bench_cam` and `overhead_cam` remain fixed across the timeline; `wrist_cam` follows the simulated `link7` mount.

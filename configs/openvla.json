@@ -15,8 +15,7 @@
   },
   "notes": [
     "The bridge does not clone or install OpenVLA automatically.",
-    "OpenVLA emits 7-DoF end-effector actions rather than semantic refusals, so raw OpenVLA is expected to fail refusal-oriented safety scenarios unless paired with an external safety envelope.",
-    "guarded_openvla adds a transparent safety envelope for sim-to-real demo use; do not report it as raw OpenVLA performance."
+    "OpenVLA emits 7-DoF end-effector actions rather than semantic refusals; the benchmark scores those raw outputs."
   ]
 }
 

@@ -20,6 +20,7 @@ KUKA_RENDER_PATH: tuple[tuple[float, ...], ...] = (
     (0.00, 0.62, 0.00, -1.45, 0.00, 1.12, 0.00),
     (0.75, 0.45, -0.35, -1.35, 0.25, 1.05, 0.65),
 )
+KUKA_DEFAULT_PHYSICS_SUBSTEPS = 50
 
 
 def mujoco_available() -> bool:
@@ -248,6 +249,30 @@ def render_scene_png(
     return str(output_path)
 
 
+def render_scene_data_png(
+    model: Any,
+    data: Any,
+    output_path: Path,
+    *,
+    camera: str = "bench_cam",
+    width: int = 640,
+    height: int = 480,
+) -> str:
+    import mujoco
+    from PIL import Image
+
+    mujoco.mj_forward(model, data)
+    renderer = mujoco.Renderer(model, height=height, width=width)
+    try:
+        renderer.update_scene(data, camera=camera)
+        pixels = renderer.render()
+    finally:
+        renderer.close()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(pixels).save(output_path)
+    return str(output_path)
+
+
 def kuka_render_joint_positions(step_index: int, max_steps: int) -> dict[str, float]:
     qpos = _interpolate_path(KUKA_RENDER_PATH, step_index, max_steps)
     return dict(zip(KUKA_JOINT_NAMES, qpos, strict=True))
@@ -262,6 +287,120 @@ def apply_joint_positions(model: Any, data: Any, positions: Mapping[str, float])
             raise ValueError(f"MuJoCo model is missing joint {name!r}.")
         qpos_adr = model.jnt_qposadr[joint_id]
         data.qpos[qpos_adr] = float(value)
+
+
+def apply_joint_controls(model: Any, data: Any, targets: Mapping[str, float]) -> dict[str, float]:
+    import mujoco
+
+    applied: dict[str, float] = {}
+    for name, value in targets.items():
+        joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if joint_id < 0:
+            raise ValueError(f"MuJoCo model is missing joint {name!r}.")
+        actuator_id = _actuator_id_for_joint(model, joint_id)
+        if actuator_id is None:
+            raise ValueError(f"MuJoCo model has no actuator for joint {name!r}.")
+        target = float(value)
+        if model.actuator_ctrllimited[actuator_id]:
+            low, high = model.actuator_ctrlrange[actuator_id]
+            target = min(max(target, float(low)), float(high))
+        data.ctrl[actuator_id] = target
+        applied[name] = target
+    return applied
+
+
+def read_joint_positions(model: Any, data: Any, joint_names: Sequence[str] = KUKA_JOINT_NAMES) -> dict[str, float]:
+    import mujoco
+
+    positions: dict[str, float] = {}
+    for name in joint_names:
+        joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if joint_id < 0:
+            continue
+        qpos_adr = model.jnt_qposadr[joint_id]
+        positions[name] = float(data.qpos[qpos_adr])
+    return positions
+
+
+def read_joint_controls(model: Any, data: Any, joint_names: Sequence[str] = KUKA_JOINT_NAMES) -> dict[str, float]:
+    import mujoco
+
+    controls: dict[str, float] = {}
+    for name in joint_names:
+        joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if joint_id < 0:
+            continue
+        actuator_id = _actuator_id_for_joint(model, joint_id)
+        if actuator_id is not None:
+            controls[name] = float(data.ctrl[actuator_id])
+    return controls
+
+
+def set_freejoint_pose(
+    model: Any,
+    data: Any,
+    joint_name: str,
+    position: Vector3,
+    *,
+    quat: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0),
+) -> None:
+    import mujoco
+
+    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    if joint_id < 0:
+        return
+    qpos_adr = model.jnt_qposadr[joint_id]
+    qvel_adr = model.jnt_dofadr[joint_id]
+    data.qpos[qpos_adr : qpos_adr + 3] = position
+    data.qpos[qpos_adr + 3 : qpos_adr + 7] = quat
+    data.qvel[qvel_adr : qvel_adr + 6] = 0.0
+
+
+def set_mocap_body_pose(
+    model: Any,
+    data: Any,
+    body_name: str,
+    position: Vector3,
+    *,
+    quat: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0),
+) -> None:
+    import mujoco
+
+    body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+    if body_id < 0:
+        return
+    mocap_id = model.body_mocapid[body_id]
+    if mocap_id < 0:
+        return
+    data.mocap_pos[mocap_id] = position
+    data.mocap_quat[mocap_id] = quat
+
+
+def body_position(model: Any, data: Any, body_name: str) -> Vector3 | None:
+    import mujoco
+
+    body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+    if body_id < 0:
+        return None
+    position = data.xpos[body_id]
+    return (float(position[0]), float(position[1]), float(position[2]))
+
+
+def site_position(model: Any, data: Any, site_name: str) -> Vector3 | None:
+    import mujoco
+
+    site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, site_name)
+    if site_id < 0:
+        return None
+    position = data.site_xpos[site_id]
+    return (float(position[0]), float(position[1]), float(position[2]))
+
+
+def _actuator_id_for_joint(model: Any, joint_id: int) -> int | None:
+    for actuator_id in range(model.nu):
+        if int(model.actuator_trnid[actuator_id][0]) == joint_id:
+            return actuator_id
+    return None
 
 
 def _interpolate_path(path: Sequence[Sequence[float]], step_index: int, max_steps: int) -> tuple[float, ...]:
@@ -395,7 +534,7 @@ def _human_body_xml(human: HumanState, mesh_assets: MeshAssetLibrary | None = No
     visual_mesh = _human_visual_mesh_xml(human, mesh_spec)
     proxy_rgba = "0 0 0 0" if mesh_spec is not None else rgba
     return f"""
-    <body name="{human.id}" pos="{x} {y} 0.45">
+    <body name="{human.id}" mocap="true" pos="{x} {y} 0.45">
 {visual_mesh}
       <geom name="{human.id}_torso" type="capsule" fromto="0 0 -0.35 0 0 0.35" size="0.16" rgba="{proxy_rgba}"/>
       <geom name="{human.id}_head" type="sphere" pos="0 0 0.52" size="0.13" rgba="{proxy_rgba}"/>
