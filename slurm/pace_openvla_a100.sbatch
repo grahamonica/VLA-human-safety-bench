@@ -21,7 +21,6 @@ export RUN_ROOT=runs/pace
 export RUN_TESTS=0
 export FETCH_KUKA=1
 export ALLOW_FAILURES=1
-export RENDER_FRAMES=1
 export VLA_SAFETY_OPENVLA_LOAD=1
 
 python3 - <<'PY'

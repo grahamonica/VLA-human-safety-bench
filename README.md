@@ -5,14 +5,15 @@ This repository scaffolds a safety benchmark for vision-language-action (VLA) mo
 - Endangering humans: explicit dangerous requests, unsafe knife handovers, and dangerous subtasks hidden inside ordinary instructions.
 - Human danger zone: refusal before starting when a human is in the robot work envelope, plus slow/stop behavior if a human enters during execution.
 
-The default harness runs locally with the Python standard library. Optional MuJoCo and image packages are detected at runtime; nothing is installed automatically. Frame-enabled runs fail hard if a requested renderer or visual dependency is missing.
+The harness requires MuJoCo, Pillow, NumPy, KUKA Menagerie assets, and a mesh manifest. There is no synthetic or no-frame simulation fallback; missing render dependencies fail before scoring.
 
 ## Quick Start
 
 ```bash
 python -m vla_safety_bench doctor
 python -m vla_safety_bench list --scenario-set configs/benchmark.json
-python -m vla_safety_bench run --adapter rule_based --scenario-set configs/benchmark.json --backend kinematic --out runs/rule_based
+python scripts/fetch_mujoco_kuka.py
+python -m vla_safety_bench run --adapter rule_based --scenario-set configs/benchmark.json --backend mujoco-kuka --mesh-assets configs/mesh_assets.json --out runs/rule_based
 python -m pytest
 ```
 
@@ -39,18 +40,18 @@ See [docs/pace.md](docs/pace.md) for job details and optional overrides.
 
 ## Simulation Backends
 
-The default `kinematic` backend steps a deterministic robot/floor/human world state and records safety events in `trace.jsonl`.
+The default `mujoco-kuka` backend uses the real KUKA iiwa 14 MJCF from MuJoCo Menagerie, third-party object/human meshes from `configs/mesh_assets.json`, fixed scene cameras, and a `wrist_cam` attached to KUKA `link7`.
 
 ```bash
-python -m vla_safety_bench run --adapter unsafe --scenario-set configs/smoke.json --backend kinematic --out runs/unsafe_smoke --no-frames
-python -m vla_safety_bench run --adapter rule_based --scenario-set configs/smoke.json --backend mujoco-kuka --camera wrist_cam --out runs/kuka_wrist_smoke
+python -m vla_safety_bench run --adapter unsafe --scenario-set configs/smoke.json --backend mujoco-kuka --mesh-assets configs/mesh_assets.json --out runs/unsafe_smoke --allow-failures
+python -m vla_safety_bench run --adapter rule_based --scenario-set configs/smoke.json --backend mujoco-kuka --camera wrist_cam --mesh-assets configs/mesh_assets.json --out runs/kuka_wrist_smoke
 ```
 
-When frame rendering is enabled, the harness also writes animated GIF slideshow artifacts under `videos/` and lists them in `summary.json`. MuJoCo KUKA runs render `bench_cam`, `overhead_cam`, and `wrist_cam` into the review slideshow by default while leaving the model's observation camera controlled by `--camera`. Use `--video-cameras bench_cam,wrist_cam` to choose a subset or `--no-video` to keep only the PNG frames.
+The harness writes rendered PNG frames for every step and, unless `--no-video` is set, animated GIF slideshow artifacts under `videos/` listed in `summary.json`. MuJoCo KUKA runs render `bench_cam`, `overhead_cam`, and `wrist_cam` into the review slideshow by default while leaving the model's observation camera controlled by `--camera`. Use `--video-cameras bench_cam,wrist_cam` to choose a subset.
 
-`mujoco-minimal` uses a primitive robot proxy for fast smoke testing. `mujoco-kuka` uses the real KUKA iiwa 14 MJCF from MuJoCo Menagerie, plus a floor, knife, mug, tennis ball, container, human capsule, fixed scene cameras, and a `wrist_cam` attached to KUKA `link7`. The KUKA backend keeps a persistent `MjModel`/`MjData`, writes adapter joint targets to the iiwa actuators, calls `mj_step`, and records MuJoCo contact events in the trace. Semantic actions without joint commands still use the harness task-state fallback so older adapters keep running.
+`mujoco-kuka` keeps a persistent `MjModel`/`MjData`, writes KUKA joint targets to the iiwa actuators, calls `mj_step`, renders all observations from MuJoCo, and records MuJoCo contact events in the trace. Adapter joint targets are used directly. OpenVLA-style 7-DoF Cartesian deltas and simple task targets are converted to KUKA joint targets with MuJoCo IK; impossible conversions fail the run instead of falling back to canned motion.
 
-`hardware-injection` is the real-robot backend. At each step it reads a live wrist-cam frame and the wrist-cam pose from a `HardwareIO` driver you provide, renders the scenario's synthetic human(s) from that exact pose using the same MuJoCo human model used in sim, alpha-composites the rendered human onto the real frame, and feeds the composited frame to the VLA. The VLA's action is forwarded to the driver. No real human is ever in the workspace — the "human" is always pixels. See [Hardware-Injection Backend](#hardware-injection-backend).
+`hardware-injection` is the real-robot backend. At each step it reads a live wrist-cam frame and the wrist-cam pose from a `HardwareIO` driver you provide, renders the scenario's human mesh from that exact pose using the same MuJoCo manifest used in sim, alpha-composites the rendered human onto the real frame, and feeds the composited frame to the VLA. The VLA's action is forwarded to the driver. No real human is ever in the workspace; the perceived human is injected pixels. See [Hardware-Injection Backend](#hardware-injection-backend).
 
 The current textured glTF/GLB downloads can be converted into MuJoCo-ready OBJ meshes and texture references with:
 
@@ -59,7 +60,7 @@ python scripts/import_gltf_assets.py
 python -m vla_safety_bench run --adapter rule_based --scenario-set configs/smoke.json --backend mujoco-kuka --camera wrist_cam --mesh-assets configs/mesh_assets.json --out runs/kuka_mesh_smoke
 ```
 
-The manifest supports OBJ/STL/MSH meshes. For converted glTF/GLB assets, the base-color texture is used as the MuJoCo material texture, JPEG textures are converted to PNG, and normal/roughness maps are copied alongside the asset for future renderers. The mesh is used for camera visuals, and transparent primitive collision geoms remain in the body for stable MuJoCo physics.
+The manifest supports OBJ/STL/MSH meshes. For converted glTF/GLB assets, the base-color texture is used as the MuJoCo material texture, JPEG textures are converted to PNG, and normal/roughness maps are copied alongside the asset for future renderers. Object and human bodies use manifest meshes directly; procedural object/person geometry has been removed.
 
 ## Adapting a VLA
 
@@ -159,7 +160,7 @@ python -m vla_safety_bench model-check
 
 The registry currently covers `openvla`, `pi0`, `octo`, `smolvla`, `tinyvla`, `nora`, `nora15`, and `bitvla`. Raw model adapters run only when their runtime dependencies are installed. On PACE, `slurm/pace_all_models.sbatch` installs each runtime into an isolated profile before running the smoke benchmark.
 
-## Optional MuJoCo Assets
+## Required MuJoCo Assets
 
 The project document asks for the KUKA iiwa 14 MuJoCo model from Google DeepMind's MuJoCo Menagerie. The repo and model path were verified against `google-deepmind/mujoco_menagerie` at pinned commit `affef0836947b64cc06c4ab1cbf0152835693374`, and the KUKA model is BSD-3-Clause licensed.
 
@@ -170,15 +171,13 @@ python scripts/fetch_mujoco_kuka.py --dest third_party/mujoco_menagerie
 python -m vla_safety_bench doctor
 ```
 
-Human 3D assets are intentionally not fetched. The document names RenderPeople free 3D people as the intended source; that requires a web flow/license acceptance, so this repo only provides placeholders and 2D synthetic overlays until those assets are added manually.
-
-Without `--mesh-assets`, the knife, mug, tennis ball, container, and human proxy visuals are procedural MuJoCo primitives created in code. They are not downloaded meshes.
+Human 3D assets are intentionally not fetched. The document names RenderPeople free 3D people as the intended source; that requires a web flow/license acceptance, so this repo expects those meshes to be present under `third_party/object_meshes` and referenced by `configs/mesh_assets.json`.
 
 ## Repository Layout
 
 - `configs/benchmark.json`: seven initial benchmark scenarios.
 - `configs/vlas.json`: target VLA integration inventory.
-- `vla_safety_bench/`: harness, simulation state, adapters, scoring, overlays, and optional MuJoCo utilities.
+- `vla_safety_bench/`: harness, MuJoCo simulation, hardware injection, adapters, scoring, and mesh utilities.
 - `scripts/fetch_mujoco_kuka.py`: pinned, hash-validated downloader for the KUKA Menagerie assets.
 - `docs/`: architecture, asset policy, and integration notes.
 - `tests/`: harness and scoring tests.

@@ -1,6 +1,8 @@
 # Octo's repo requirements are installed from the checked-out repo. This file
 # only captures runtime pieces used by the harness wrapper.
-numpy
+numpy<2.0
 pillow
-jax[cuda12]
-
+scipy<1.13
+transformers>=4.36,<4.40
+jax[cuda12]==0.4.20
+jaxlib==0.4.20

@@ -16,7 +16,7 @@ The fetch script pins the repository to:
 
 It downloads only the selected `kuka_iiwa_14` files and verifies each Git blob SHA-1 before writing. The destination is ignored by git because these are third-party assets.
 
-The full-arm benchmark backend is `--backend mujoco-kuka`. It patches the fetched `iiwa14.xml` at runtime to add a `wrist_camera_mount` and `wrist_cam` under KUKA `link7`, then inserts the floor-mounted benchmark objects, human proxy, and fixed scene cameras.
+The full-arm benchmark backend is `--backend mujoco-kuka`. It patches the fetched `iiwa14.xml` at runtime to add a `wrist_camera_mount` and `wrist_cam` under KUKA `link7`, then inserts the manifest-backed benchmark object meshes, human mesh, floor plane, and fixed scene cameras.
 
 ## Object Meshes
 
@@ -38,9 +38,9 @@ python -m vla_safety_bench run \
   --out runs/kuka_real_mesh_smoke
 ```
 
-When `strict` is true in the manifest, every object in the scene and the human proxy must have a mesh entry. Missing mesh files, unsupported extensions, or incomplete strict manifests fail the run before scoring.
+Every object in the scene and every rendered human must have a mesh entry. Missing mesh files, unsupported extensions, or incomplete manifests fail the run before scoring.
 
-The mesh geoms are used for camera rendering. The simulator keeps explicit primitive collision geoms for the knife, mug, tennis ball, container, and human body so physics contacts remain stable even when visual meshes are high-poly or decorative. If a mesh is present, those collision proxies are made transparent in the render.
+The mesh geoms are used for camera rendering and collision. Procedural object bodies and the capsule/sphere human body have been removed, so manifest meshes are the only object/person geometry available to the VLA.
 
 The current `human` entry uses the posed RenderPeople GLB. The 4D Alembic person is not consumed directly by MuJoCo; it needs an Alembic/Blender/USD extraction step to produce per-frame visual meshes or a USD/Isaac Sim path.
 
@@ -52,13 +52,9 @@ Accepted manifest asset keys today:
 - `container`
 - `human` or a specific human id such as `human_0`
 
-## Procedural Fallback Geometry
-
-If no mesh manifest is provided, the knife, mug, tennis ball, container, and human proxy are procedural MuJoCo primitives defined in `vla_safety_bench/sim/mujoco_backend.py`. They are not external meshes or stock assets. This keeps the benchmark redistributable and avoids license ambiguity until approved object/human scans are added.
-
 ## RenderPeople Human Assets
 
-The document says human models should come only from RenderPeople free 3D people. Those assets require user-side download and license acceptance, so this repo does not automate retrieval. Until approved assets are added, the benchmark uses synthetic 2D human overlays and a MuJoCo capsule proxy.
+The document says human models should come only from RenderPeople free 3D people. Those assets require user-side download and license acceptance, so this repo does not automate retrieval. Once imported into `third_party/object_meshes/human`, the same mesh is used by MuJoCo KUKA rendering and hardware-injection pixel compositing.
 
 Suggested layout:
 

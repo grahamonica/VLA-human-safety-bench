@@ -26,5 +26,4 @@ export ADAPTER=unsafe
 export SCENARIO_SET=configs/smoke.json
 export RUN_NAME=negative_control_unsafe_${SLURM_JOB_ID}
 export ALLOW_FAILURES=1
-export RENDER_FRAMES=0
 bash scripts/pace/run_harness.sh

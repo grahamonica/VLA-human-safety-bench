@@ -36,12 +36,40 @@ install_repo_requirements_if_present() {
   fi
 }
 
+
+# Per-model env tweaks (added by setup)
+_pi0_python_module() {
+    if command -v module >/dev/null 2>&1; then
+        module load python/3.11.9 2>/dev/null || true
+    fi
+    PY311=$(command -v python3.11 || true)
+    if [[ -z "$PY311" ]]; then
+        echo "pi0 requires Python >=3.11, but python3.11 was not found after loading python/3.11.9." >&2
+        return 2
+    fi
+    "$PY311" -m ensurepip --upgrade 2>/dev/null || "$PY311" -m ensurepip 2>/dev/null || true
+    # Recreate the model-pi0 venv with python 3.11 if it currently uses 3.10 or is missing.
+    local cache_root="${VLA_BENCH_CACHE_DIR:-${SCRATCH:-${REPO_ROOT}/.pace_cache}/vla-human-safety-bench}"
+    local venv_dir="${VLA_BENCH_VENV:-${cache_root}/venvs/model-pi0}"
+    if [[ ! -x "$venv_dir/bin/python" ]] || ! "$venv_dir/bin/python" -c 'import sys; assert sys.version_info[:2]>=(3,11)' 2>/dev/null; then
+        rm -rf "$venv_dir"
+        "$PY311" -m venv "$venv_dir"
+    fi
+    source "$venv_dir/bin/activate"
+    python -m pip install --upgrade pip setuptools wheel
+    if ! python -c 'import numpy, PIL' 2>/dev/null; then
+        python -m pip install -r "$REPO_ROOT/requirements/pace-base.txt"
+    fi
+    python -m pip install -e "$REPO_ROOT"
+}
+
 case "${MODEL_ID}" in
   openvla)
     python -m pip install -r "${REPO_ROOT}/requirements/openvla-min.txt"
     export VLA_SAFETY_OPENVLA_LOAD=1
     ;;
   pi0|pi_zero|pi-zero)
+    _pi0_python_module
     repo_dir="$(clone_checked_repo openpi https://github.com/Physical-Intelligence/openpi.git 650c5b0283a49c42784fb5055a0507da2c6d347d)"
     python -m pip install uv
     (cd "${repo_dir}" && GIT_LFS_SKIP_SMUDGE=1 uv sync && GIT_LFS_SKIP_SMUDGE=1 uv pip install -e .)
@@ -51,9 +79,10 @@ case "${MODEL_ID}" in
     ;;
   octo)
     repo_dir="$(clone_checked_repo octo https://github.com/octo-models/octo.git 241fb3514b7c40957a86d869fecb7c7fc353f540)"
-    python -m pip install -r "${REPO_ROOT}/requirements/model-octo.txt"
     install_repo_requirements_if_present "${repo_dir}" requirements.txt
+    python -m pip install -r "${REPO_ROOT}/requirements/model-octo.txt"
     python -m pip install -e "${repo_dir}"
+    python -m pip install -r "${REPO_ROOT}/requirements/model-octo.txt"
     export VLA_SAFETY_OCTO_REPO="${repo_dir}"
     export VLA_SAFETY_OCTO_LOAD=1
     ;;
@@ -89,7 +118,8 @@ case "${MODEL_ID}" in
   bitvla|bit_vla)
     repo_dir="$(clone_checked_repo bitvla https://github.com/ustcwhy/BitVLA.git 8afac0260b3748b14657a69ec58e3d9f0d6da3a7)"
     python -m pip install -r "${REPO_ROOT}/requirements/openvla-min.txt"
-    python -m pip install accelerate
+    python -m pip install -U "tokenizers>=0.20.0,<0.21" "transformers>=4.45.0,<5.0" accelerate
+    python -m pip install -e "${repo_dir}/openvla-oft/bitvla"
     export VLA_SAFETY_BITVLA_REPO="${repo_dir}"
     export VLA_SAFETY_BITVLA_LOAD=1
     ;;

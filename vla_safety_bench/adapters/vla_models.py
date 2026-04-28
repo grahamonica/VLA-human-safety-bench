@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,14 @@ class RegistryVLAAdapter:
             path = Path(repo_dir).expanduser().resolve()
             if str(path) not in sys.path:
                 sys.path.insert(0, str(path))
+            if self.spec.runtime == "bitvla_repo":
+                for extra_path in (
+                    path / "openvla-oft",
+                    path / "openvla-oft" / "bitvla",
+                    path / "openvla-oft" / "bitvla" / "model",
+                ):
+                    if extra_path.exists() and str(extra_path) not in sys.path:
+                        sys.path.insert(0, str(extra_path))
 
         missing = [
             module
@@ -181,12 +190,19 @@ def load_octo_policy(checkpoint: str | None) -> Any:
 
 def load_lerobot_policy(checkpoint: str | None, device: str) -> Any:
     try:
+        # New lerobot API: use the policy class directly
+        from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+        return SmolVLAPolicy.from_pretrained(checkpoint or "lerobot/smolvla_base").to(device)
+    except ImportError:
+        pass
+    try:
         from lerobot.common.policies.factory import make_policy
-    except Exception as exc:
+    except ImportError as exc:
         raise RuntimeUnavailable(
             "Installed LeRobot does not expose the expected make_policy API."
         ) from exc
 
+    # Old API path (only reached if SmolVLAPolicy import failed but make_policy exists)
     return make_policy(policy_path=checkpoint or "lerobot/smolvla_base", device=device)
 
 
@@ -207,9 +223,15 @@ def load_nora15_policy(checkpoint: str | None, device: str) -> Any:
 
 def load_hf_vision2seq(checkpoint: str | None, device: str) -> dict[str, Any]:
     import torch
-    from transformers import AutoModelForVision2Seq, AutoProcessor
+    try:
+        from transformers import AutoModelForVision2Seq, AutoProcessor
+    except ImportError:
+        from transformers import AutoModelForImageTextToText as AutoModelForVision2Seq
+        from transformers import AutoProcessor
 
     model_id = checkpoint or "lxsy/bitvla-bf16"
+    if "bitvla" in model_id.lower():
+        model_id = _prepare_bitvla_checkpoint(model_id)
     dtype = torch.bfloat16 if device.startswith("cuda") else torch.float32
     processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
     model = AutoModelForVision2Seq.from_pretrained(
@@ -218,7 +240,84 @@ def load_hf_vision2seq(checkpoint: str | None, device: str) -> dict[str, Any]:
         torch_dtype=dtype,
         low_cpu_mem_usage=True,
     ).to(device)
+    if "bitvla" in str(model_id).lower():
+        _configure_bitvla_constants(model)
     return {"processor": processor, "model": model, "device": device, "dtype": dtype, "model_id": model_id}
+
+
+def _prepare_bitvla_checkpoint(model_id: str) -> str:
+    checkpoint_path = Path(model_id).expanduser()
+    if not checkpoint_path.exists():
+        try:
+            from huggingface_hub import snapshot_download
+        except Exception:
+            return model_id
+        checkpoint_path = Path(snapshot_download(repo_id=model_id)).resolve()
+    if not checkpoint_path.is_dir():
+        return model_id
+
+    repo_dir = os.environ.get("VLA_SAFETY_BITVLA_REPO")
+    if not repo_dir:
+        return str(checkpoint_path)
+    prepared_root = Path(os.environ.get("VLA_BENCH_CACHE_DIR", str(checkpoint_path.parent))).expanduser()
+    prepared_path = prepared_root / "bitvla_prepared" / checkpoint_path.name
+    shutil.copytree(checkpoint_path, prepared_path, symlinks=True, dirs_exist_ok=True)
+    checkpoint_path = prepared_path.resolve()
+
+    repo_path = Path(repo_dir).expanduser().resolve()
+    source_root = repo_path / "openvla-oft" / "bitvla"
+    config_src = source_root / "configuration_bit_vla.py"
+    model_src = source_root / "model" / "bitvla_for_action_prediction.py"
+    if not config_src.exists() or not model_src.exists():
+        return str(checkpoint_path)
+
+    _copy_if_needed(config_src, checkpoint_path / "configuration_bit_vla.py")
+    _copy_if_needed(config_src, checkpoint_path / "configuration_bitvla.py")
+    _copy_if_needed(model_src, checkpoint_path / "bitvla_for_action_prediction.py")
+    _copy_if_needed(model_src, checkpoint_path / "bitvla.py")
+    _update_bitvla_auto_map(checkpoint_path / "config.json")
+    return str(checkpoint_path)
+
+
+def _copy_if_needed(source: Path, destination: Path) -> None:
+    if destination.exists() and destination.read_bytes() == source.read_bytes():
+        return
+    shutil.copy2(source, destination)
+
+
+def _update_bitvla_auto_map(config_path: Path) -> None:
+    if not config_path.exists():
+        return
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    if not isinstance(config, dict):
+        return
+    config["auto_map"] = {
+        "AutoConfig": "configuration_bit_vla.Bitvla_Config",
+        "AutoModelForVision2Seq": "bitvla_for_action_prediction.BitVLAForActionPrediction",
+    }
+    config_path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _configure_bitvla_constants(model: Any) -> None:
+    if not hasattr(model, "set_constant"):
+        return
+    try:
+        from bitvla.constants import (
+            BITNET_ACTION_TOKEN_BEGIN_IDX,
+            BITNET_DEFAULT_IMAGE_TOKEN_IDX,
+            BITNET_IGNORE_INDEX,
+            BITNET_PROPRIO_PAD_IDX,
+            BITNET_STOP_INDEX,
+        )
+    except Exception:
+        return
+    model.set_constant(
+        image_token_idx=BITNET_DEFAULT_IMAGE_TOKEN_IDX,
+        proprio_pad_idx=BITNET_PROPRIO_PAD_IDX,
+        ignore_idx=BITNET_IGNORE_INDEX,
+        action_token_begin_idx=BITNET_ACTION_TOKEN_BEGIN_IDX,
+        stop_index=BITNET_STOP_INDEX,
+    )
 
 
 def predict_hf_vision2seq(runtime: dict[str, Any], observation: JsonDict, family: str) -> JsonDict:
@@ -252,8 +351,14 @@ def sample_octo_action(model: Any, observation: JsonDict) -> Any:
 
 
 def sample_lerobot_action(model: Any, observation: JsonDict) -> Any:
+    import numpy as np
+
+    image = np.asarray(load_pil_image(observation), dtype=np.uint8)
     obs = {
-        "observation.images.front": load_pil_image(observation),
+        "observation.images.front": image,
+        "observation.images.camera1": image,
+        "observation.images.camera2": image,
+        "observation.images.camera3": image,
         "task": str(observation.get("prompt", "")),
     }
     if hasattr(model, "select_action"):
@@ -264,10 +369,15 @@ def sample_lerobot_action(model: Any, observation: JsonDict) -> Any:
 
 
 def openpi_observation(observation: JsonDict) -> JsonDict:
+    import numpy as np
     image = load_pil_image(observation)
+    # pi05_droid expects state and image keys
     return {
         "observation/exterior_image_1_left": image,
+        "observation/exterior_image_2_left": image,
         "observation/wrist_image_left": image,
+        "observation/joint_position": np.zeros(7, dtype=np.float32),
+        "observation/gripper_position": np.zeros(1, dtype=np.float32),
         "prompt": str(observation.get("prompt", "")),
     }
 

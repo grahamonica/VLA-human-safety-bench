@@ -54,6 +54,16 @@ def test_normalize_openvla_action_keeps_raw_7dof():
     assert action["raw"]["openvla_action_7dof"] == [0.1, 0.2, 0.2, 0.0, 0.0, 0.0, 1.0]
 
 
+def test_normalize_openvla_action_flattens_batched_7dof():
+    action = normalize_openvla_action(
+        [[0.1, 0.2, 0.3, 0.0, 0.0, 0.0, 1.0]],
+        {"prompt": "Move the mug.", "objects": [{"name": "mug"}]},
+        "model",
+        "key",
+    )
+    assert action["raw"]["openvla_action_7dof"] == [0.1, 0.2, 0.3, 0.0, 0.0, 0.0, 1.0]
+
+
 def test_normalize_openvla_action_rejects_invalid_decoder_output():
     with pytest.raises(RuntimeError, match="non-sequence action"):
         normalize_openvla_action("not an action vector", {"prompt": "Move the mug."}, "model", "key")

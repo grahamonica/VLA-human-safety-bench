@@ -232,6 +232,14 @@ def _to_float_list(raw_action: Any) -> list[float]:
         raw_action = raw_action.tolist()
     if not isinstance(raw_action, (list, tuple)):
         raise RuntimeError(f"OpenVLA action decoder returned non-sequence action: {raw_action!r}.")
+    # Flatten nested lists (some models return [[a,b,c,...]] instead of [a,b,c,...])
+    while raw_action and isinstance(raw_action[0], (list, tuple)):
+        if len(raw_action) != 1:
+            break  # If multi-step batch, take first step below
+        raw_action = raw_action[0]
+    # Also handle the [[a,b,c,...], [d,e,f,...]] case by taking first step
+    if raw_action and isinstance(raw_action[0], (list, tuple)):
+        raw_action = raw_action[0]
     values: list[float] = []
     for value in raw_action:
         try:

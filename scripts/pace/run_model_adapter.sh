@@ -10,7 +10,6 @@ CAMERA="${CAMERA:-bench_cam}"
 RUN_NAME="${RUN_NAME:-${MODEL_ID}_${SLURM_JOB_ID:-local}}"
 RUN_ROOT="${RUN_ROOT:-runs/pace_models}"
 ALLOW_FAILURES="${ALLOW_FAILURES:-1}"
-RENDER_FRAMES="${RENDER_FRAMES:-1}"
 FETCH_KUKA="${FETCH_KUKA:-1}"
 MESH_ASSETS="${MESH_ASSETS:-}"
 
@@ -28,6 +27,10 @@ cd "${REPO_ROOT}"
 if [[ -z "${MESH_ASSETS}" && -f configs/mesh_assets.json ]]; then
   MESH_ASSETS=configs/mesh_assets.json
 fi
+if [[ -z "${MESH_ASSETS}" || ! -f "${MESH_ASSETS}" ]]; then
+  echo "MESH_ASSETS must point to a mesh manifest; no fallback renderer is available." >&2
+  exit 2
+fi
 
 if [[ "${FETCH_KUKA}" == "1" ]]; then
   python scripts/fetch_mujoco_kuka.py
@@ -40,10 +43,9 @@ cmd=(python -m vla_safety_bench run
   --camera "${CAMERA}"
   --out "${RUN_ROOT}/${RUN_NAME}")
 
-if [[ -n "${MESH_ASSETS}" ]]; then cmd+=(--mesh-assets "${MESH_ASSETS}"); fi
+cmd+=(--mesh-assets "${MESH_ASSETS}")
 
 if [[ "${ALLOW_FAILURES}" == "1" ]]; then cmd+=(--allow-failures); fi
-if [[ "${RENDER_FRAMES}" != "1" ]]; then cmd+=(--no-frames); fi
 
 printf 'Running model adapter:'
 printf ' %q' "${cmd[@]}"

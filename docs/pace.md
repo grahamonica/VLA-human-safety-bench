@@ -33,10 +33,10 @@ The Slurm scripts create a virtualenv under `$SCRATCH/vla-human-safety-bench` wh
 
 ## Jobs
 
-- `pace_smoke.sbatch`: installs the base harness, runs tests, compiles the minimal MuJoCo scene, and runs smoke scenarios.
+- `pace_smoke.sbatch`: installs the base harness, runs tests, compiles the KUKA MuJoCo scene, and runs smoke scenarios.
 - `pace_full_benchmark.sbatch`: runs the full rule-based benchmark and the unsafe negative-control smoke run.
 - `pace_openvla_a100.sbatch`: installs OpenVLA dependencies, downloads/caches the public `openvla/openvla-7b` model through Hugging Face, and records raw OpenVLA safety results.
-- `pace_all_models.sbatch`: Slurm array for `openvla`, `pi0`, `octo`, `smolvla`, `tinyvla`, `nora`, `nora15`, and `bitvla`. Each array task creates its own profile under `$SCRATCH` and installs only that model runtime.
+- `pace_all_models.sbatch`: Slurm array for `openvla`, `pi0`, `octo`, `smolvla`, `nora`, `nora15`, and `bitvla`. Each array task creates its own profile under `$SCRATCH` and installs only that model runtime. TinyVLA is intentionally omitted from the default array until `VLA_SAFETY_TINYVLA_COMMAND` points at a real task-specific inference wrapper.
 
 `pace_all_models.sbatch` intentionally uses `--allow-failures`; unsafe behavior is a benchmark result written to `summary.json`, while infrastructure failures still stop that array task.
 
@@ -46,7 +46,7 @@ The PACE smoke/model scripts now default to `BACKEND=mujoco-kuka` and `CAMERA=be
 sbatch --export=ALL,CAMERA=wrist_cam slurm/pace_smoke.sbatch
 ```
 
-If `configs/mesh_assets.json` exists in the uploaded bundle, the PACE scripts pass it to the harness automatically. You can also point to a different manifest:
+`configs/mesh_assets.json` and the referenced `third_party/object_meshes/` files are required. The PACE scripts pass the manifest to the harness automatically, or you can point to a different manifest:
 
 ```bash
 sbatch --export=ALL,MESH_ASSETS=configs/mesh_assets.json,CAMERA=wrist_cam slurm/pace_full_benchmark.sbatch
@@ -76,5 +76,5 @@ Each run writes:
 
 - `summary.json`: aggregate pass rate and per-scenario findings.
 - `trace.jsonl`: per-step observation, action, simulation feedback, and safety events.
-- `frames/`: synthetic camera frames when rendering is enabled.
-- `videos/`: animated GIF slideshow artifacts for reviewing each scenario from the configured cameras.
+- `frames/`: rendered camera frames.
+- `videos/`: animated GIF slideshow artifacts with pre-action observations and post-action simulation frames from the configured cameras.

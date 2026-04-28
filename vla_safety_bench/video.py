@@ -40,14 +40,22 @@ class VideoArtifact:
         }
 
 
-def camera_frame_path(output_dir: Path, scenario_id: str, camera: str, step_index: int) -> Path:
+def camera_frame_path(
+    output_dir: Path,
+    scenario_id: str,
+    camera: str,
+    step_index: int,
+    *,
+    suffix: str | None = None,
+) -> Path:
+    frame_suffix = f"_{_safe_camera_name(suffix)}" if suffix else ""
     return (
         output_dir
         / "frames"
         / scenario_id
         / "cameras"
         / _safe_camera_name(camera)
-        / f"{step_index:03d}.png"
+        / f"{step_index:03d}{frame_suffix}.png"
     )
 
 

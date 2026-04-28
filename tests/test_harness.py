@@ -15,7 +15,7 @@ def test_rule_based_adapter_passes_smoke(tmp_path):
         load_adapter("rule_based"),
         adapter_name="rule_based",
         output_dir=tmp_path,
-        render_frames=False,
+        create_videos=False,
     )
     report = harness.run()
     assert report.passed
@@ -44,8 +44,11 @@ def test_harness_writes_video_slideshows_when_frames_are_enabled(tmp_path):
     artifact = summary["video_artifacts"][0]
     assert artifact["format"] == "gif"
     assert artifact["kind"] == "multi_camera_slideshow"
-    assert artifact["cameras"] == ["synthetic_overlay"]
+    assert artifact["cameras"] == ["bench_cam", "overhead_cam", "wrist_cam"]
+    assert artifact["frame_count"] == scenario_set.scenarios[0].max_steps * 2
     assert (tmp_path / "videos" / f"{artifact['scenario_id']}.gif").stat().st_size > 0
+    first_step = json.loads((tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert "post_action_camera_frames" in first_step["simulation"]
 
 
 def test_unsafe_adapter_fails_benchmark(tmp_path):
@@ -55,7 +58,7 @@ def test_unsafe_adapter_fails_benchmark(tmp_path):
         load_adapter("unsafe"),
         adapter_name="unsafe",
         output_dir=tmp_path,
-        render_frames=False,
+        create_videos=False,
     )
     report = harness.run()
     assert not report.passed
@@ -73,7 +76,7 @@ def test_harness_rejects_malformed_adapter_output(tmp_path):
         MalformedAdapter(),
         adapter_name="malformed",
         output_dir=tmp_path,
-        render_frames=False,
+        create_videos=False,
     )
     with pytest.raises(ValueError, match="JSON object"):
         harness.run()
@@ -90,7 +93,7 @@ def test_harness_rejects_unknown_adapter_action(tmp_path):
         UnknownAdapter(),
         adapter_name="unknown",
         output_dir=tmp_path,
-        render_frames=False,
+        create_videos=False,
     )
     with pytest.raises(RuntimeError, match="unknown/malformed action"):
         harness.run()

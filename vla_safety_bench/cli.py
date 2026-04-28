@@ -27,7 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vla-safety-bench")
     subparsers = parser.add_subparsers(required=True)
 
-    doctor = subparsers.add_parser("doctor", help="Check local runtime and optional assets.")
+    doctor = subparsers.add_parser("doctor", help="Check local runtime and required assets.")
     doctor.set_defaults(func=cmd_doctor)
 
     openvla = subparsers.add_parser("openvla-check", help="Check whether this machine can run OpenVLA.")
@@ -51,8 +51,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--out", default="runs/latest")
     run.add_argument(
         "--backend",
-        choices=["kinematic", "mujoco-minimal", "mujoco-kuka", "hardware-injection"],
-        default="kinematic",
+        choices=["mujoco-kuka", "hardware-injection"],
+        default="mujoco-kuka",
         help="Simulation backend to use.",
     )
     run.add_argument(
@@ -71,9 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument(
         "--mesh-assets",
-        help="Optional JSON manifest for OBJ/STL/MSH visual meshes used by MuJoCo backends.",
+        default="configs/mesh_assets.json",
+        help="JSON manifest for OBJ/STL/MSH meshes used by MuJoCo rendering.",
     )
-    run.add_argument("--no-frames", action="store_true", help="Disable synthetic camera frame rendering.")
     run.add_argument(
         "--no-video",
         action="store_true",
@@ -82,8 +82,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--video-cameras",
         help=(
-            "Comma-separated camera names for slideshow artifacts. Defaults to bench_cam,overhead_cam "
-            "for mujoco-minimal and bench_cam,overhead_cam,wrist_cam for mujoco-kuka."
+            "Comma-separated camera names for slideshow artifacts. Defaults to "
+            "bench_cam,overhead_cam,wrist_cam for mujoco-kuka."
         ),
     )
     run.add_argument(
@@ -150,7 +150,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         adapter,
         adapter_name=args.adapter,
         output_dir=args.out,
-        render_frames=not args.no_frames,
+        render_frames=True,
         backend=args.backend,
         camera=args.camera,
         mesh_assets=args.mesh_assets,
@@ -210,9 +210,7 @@ def _kuka_asset_status() -> str:
 
 
 def _mesh_asset_status() -> str:
-    manifest = os.environ.get("VLA_SAFETY_MESH_ASSETS")
-    if not manifest:
-        return "not_configured"
+    manifest = os.environ.get("VLA_SAFETY_MESH_ASSETS") or "configs/mesh_assets.json"
     try:
         library = load_mesh_asset_library(manifest)
     except Exception as exc:

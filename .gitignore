@@ -12,6 +12,5 @@ build/
 # Benchmark outputs and optional large assets.
 runs/
 third_party/mujoco_menagerie/
-third_party/object_meshes/
 third_party/renderpeople/
 *.log

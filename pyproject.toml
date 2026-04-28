@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{name = "VLA Human Safety Bench Contributors"}]
-dependencies = []
+dependencies = ["mujoco>=2.3.3", "numpy", "Pillow"]
 
 [project.optional-dependencies]
 sim = ["mujoco>=2.3.3", "numpy", "Pillow"]
@@ -24,4 +24,3 @@ include = ["vla_safety_bench*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-

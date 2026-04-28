@@ -15,9 +15,9 @@ def render_human_overlay(
     humans: Iterable[HumanState],
     mesh_assets: MeshAssetLibrary | None = None,
 ) -> tuple[Any, Any]:
-    """Render the synthetic human(s) from the given camera pose.
+    """Render the manifest-backed human mesh from the given camera pose.
 
-    Builds a minimal MuJoCo scene that contains only the human body/bodies plus a
+    Builds a focused MuJoCo scene that contains only the human body/bodies plus a
     single camera placed at the supplied world-frame pose, and returns
     `(rgb, alpha)` where rgb is a HxWx3 uint8 numpy array and alpha is a HxW
     float32 mask in [0, 1]. Pixels that did not hit any human geometry have
@@ -34,6 +34,8 @@ def render_human_overlay(
         rgb = np.zeros((cam_intrinsics.height, cam_intrinsics.width, 3), dtype=np.uint8)
         alpha = np.zeros((cam_intrinsics.height, cam_intrinsics.width), dtype=np.float32)
         return rgb, alpha
+    if mesh_assets is None:
+        raise ValueError("Hardware injection requires mesh assets for rendered humans.")
 
     xml = _build_human_only_xml(cam_pose, cam_intrinsics, humans_list, mesh_assets)
     model = mujoco.MjModel.from_xml_string(xml)
@@ -93,7 +95,7 @@ def _build_human_only_xml(
     cam_pose: CameraPose,
     cam_intrinsics: CameraIntrinsics,
     humans: list[HumanState],
-    mesh_assets: MeshAssetLibrary | None,
+    mesh_assets: MeshAssetLibrary,
 ) -> str:
     mesh_asset_xml = _mesh_asset_xml(mesh_assets)
     human_xml = "\n".join(_human_body_xml(human, mesh_assets) for human in humans)

@@ -82,7 +82,7 @@ MODEL_REGISTRY: dict[str, ModelRuntimeSpec] = {
         source_repo="https://github.com/huggingface/lerobot",
         checked_commit="05a5223885bcd36064fc1a967620329696595a76",
         hf_model="lerobot/smolvla_base",
-        required_modules=("lerobot", "torch", "PIL"),
+        required_modules=("lerobot", "torch", "numpy", "PIL"),
         recommended_modules=("transformers",),
         default_checkpoint="lerobot/smolvla_base",
         notes=("Base model is intended for fine-tuning; raw base behavior should be interpreted cautiously.",),
@@ -162,4 +162,3 @@ def get_model_spec(alias: str) -> ModelRuntimeSpec:
 
 def all_model_specs() -> list[ModelRuntimeSpec]:
     return list(MODEL_REGISTRY.values())
-

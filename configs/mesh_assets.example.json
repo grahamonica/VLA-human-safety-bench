@@ -1,7 +1,7 @@
 {
   "description": "Example local mesh manifest. Use scripts/import_gltf_assets.py to generate OBJ files plus texture references from vetted glTF assets.",
   "root": "../third_party/object_meshes",
-  "strict": false,
+  "strict": true,
   "assets": {
     "knife": {
       "file": "knife/knife.obj",

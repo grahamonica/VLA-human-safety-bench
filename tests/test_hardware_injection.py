@@ -16,6 +16,7 @@ from vla_safety_bench.hardware.pixel_injection import (
 )
 from vla_safety_bench.scenarios import load_scenario_set
 from vla_safety_bench.sim.mujoco_backend import mujoco_available
+from vla_safety_bench.sim.mesh_assets import load_mesh_asset_library
 from vla_safety_bench.types import HumanState, RobotAction
 
 
@@ -94,10 +95,11 @@ def test_render_human_overlay_marks_human_pixels_when_mujoco_available():
     )
     humans = [HumanState(id="human_0", position_m=(1.50, 0.0, 0.0))]
 
-    rgb, alpha = render_human_overlay(pose, intrinsics, humans)
+    mesh_assets = load_mesh_asset_library("configs/mesh_assets.json", required=True)
+    rgb, alpha = render_human_overlay(pose, intrinsics, humans, mesh_assets=mesh_assets)
     assert rgb.shape == (96, 128, 3)
     assert alpha.shape == (96, 128)
-    # The proxy human is in front of the cam; some pixels must be flagged as human.
+    # The mesh human is in front of the cam; some pixels must be flagged as human.
     assert alpha.sum() > 0
     # And not the entire frame should be human.
     assert alpha.sum() < alpha.size

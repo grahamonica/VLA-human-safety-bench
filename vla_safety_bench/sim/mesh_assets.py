@@ -87,14 +87,27 @@ class MeshAssetSpec:
         )
         return "\n".join(entries)
 
-    def visual_geom_xml(self, geom_name: str) -> str:
+    def geom_xml(
+        self,
+        geom_name: str,
+        *,
+        visual_only: bool = False,
+        mass: float | None = None,
+        friction: str | None = None,
+    ) -> str:
         material_attr = f" material={quoteattr(self.material_name)}" if self.material or self.texture_path else ""
         rgba_attr = f" rgba={quoteattr(self.rgba)}" if self.rgba and not material_attr else ""
+        contact_attr = ' contype="0" conaffinity="0"' if visual_only else ""
+        mass_attr = f' mass="{mass:g}"' if mass is not None else ""
+        friction_attr = f" friction={quoteattr(friction)}" if friction else ""
         return (
             f'      <geom name={quoteattr(geom_name)} type="mesh" mesh={quoteattr(self.mesh_name)}'
             f' pos={quoteattr(_vec(self.pos))} euler={quoteattr(_vec(self.euler))}'
-            f"{material_attr}{rgba_attr} contype=\"0\" conaffinity=\"0\"/>"
+            f"{material_attr}{rgba_attr}{contact_attr}{mass_attr}{friction_attr}/>"
         )
+
+    def visual_geom_xml(self, geom_name: str) -> str:
+        return self.geom_xml(geom_name, visual_only=True)
 
 
 @dataclass(frozen=True)
@@ -128,7 +141,7 @@ class MeshAssetLibrary:
             raise ValueError("Each mesh asset manifest entry must be a JSON object.")
         return cls(
             manifest_path=manifest_path,
-            strict=bool(data.get("strict", False)),
+            strict=True,
             assets=assets,
         )
 
@@ -145,8 +158,6 @@ class MeshAssetLibrary:
         return self.assets.get("table")
 
     def validate_scene(self, objects: Iterable[ObjectState], humans: Iterable[HumanState]) -> None:
-        if not self.strict:
-            return
         missing: list[str] = []
         for obj in objects:
             if self.object_spec(obj.name) is None:
@@ -156,16 +167,25 @@ class MeshAssetLibrary:
                 missing.append(human.id if human.id in self.assets else "human")
         if missing:
             raise ValueError(
-                f"Mesh asset manifest {self.manifest_path} is strict but missing scene assets: "
+                f"Mesh asset manifest {self.manifest_path} is missing required scene meshes: "
                 f"{', '.join(sorted(set(missing)))}"
             )
 
 
-def load_mesh_asset_library(path: MeshAssetLibrary | str | Path | None = None) -> MeshAssetLibrary | None:
+def load_mesh_asset_library(
+    path: MeshAssetLibrary | str | Path | None = None,
+    *,
+    required: bool = False,
+) -> MeshAssetLibrary | None:
     if isinstance(path, MeshAssetLibrary):
         return path
     manifest = path or os.environ.get("VLA_SAFETY_MESH_ASSETS")
     if not manifest:
+        if required:
+            raise ValueError(
+                "MuJoCo rendering requires a mesh asset manifest. Pass --mesh-assets or set "
+                "VLA_SAFETY_MESH_ASSETS."
+            )
         return None
     return MeshAssetLibrary.from_file(manifest)
 

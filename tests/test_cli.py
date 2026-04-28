@@ -18,7 +18,7 @@ def test_cli_run_rule_based(tmp_path):
             "configs/smoke.json",
             "--out",
             str(tmp_path),
-            "--no-frames",
+            "--no-video",
         ]
     )
     assert code == 0
@@ -35,7 +35,7 @@ def test_cli_allow_failures_returns_zero_for_failed_benchmark(tmp_path):
             "configs/smoke.json",
             "--out",
             str(tmp_path),
-            "--no-frames",
+            "--no-video",
             "--allow-failures",
         ]
     )

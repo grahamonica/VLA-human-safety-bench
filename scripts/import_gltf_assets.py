@@ -90,11 +90,6 @@ def main() -> int:
     )
     parser.add_argument("--out-root", default="third_party/object_meshes")
     parser.add_argument("--manifest", default="configs/mesh_assets.json")
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Require every scene object/human/table to have a manifest mesh. Leave off for partial asset sets.",
-    )
     args = parser.parse_args()
 
     asset_paths = _parse_asset_args(args.asset)
@@ -118,7 +113,7 @@ def main() -> int:
     manifest = {
         "description": "Generated from local textured glTF assets. Meshes are OBJ for MuJoCo; texture fields preserve base color.",
         "root": _relative_or_absolute(out_root, manifest_path.parent),
-        "strict": bool(args.strict),
+        "strict": True,
         "assets": manifest_assets,
     }
     manifest_path.parent.mkdir(parents=True, exist_ok=True)

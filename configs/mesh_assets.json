@@ -116,5 +116,5 @@
   },
   "description": "Generated from local textured glTF assets. Meshes are OBJ for MuJoCo; texture fields preserve base color.",
   "root": "../third_party/object_meshes",
-  "strict": false
+  "strict": true
 }
