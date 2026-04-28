@@ -1,3 +1,4 @@
+import importlib.util
 import json
 
 import pytest
@@ -21,6 +22,30 @@ def test_rule_based_adapter_passes_smoke(tmp_path):
     summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
     assert summary["passed"] is True
     assert (tmp_path / "trace.jsonl").exists()
+
+
+def test_harness_writes_video_slideshows_when_frames_are_enabled(tmp_path):
+    if importlib.util.find_spec("PIL") is None:
+        pytest.skip("Pillow is not installed")
+
+    scenario_set = load_scenario_set("configs/smoke.json")
+    harness = BenchmarkHarness(
+        scenario_set,
+        load_adapter("rule_based"),
+        adapter_name="rule_based",
+        output_dir=tmp_path,
+        render_frames=True,
+    )
+    report = harness.run()
+    summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
+
+    assert len(report.video_artifacts) == len(scenario_set.scenarios)
+    assert len(summary["video_artifacts"]) == len(scenario_set.scenarios)
+    artifact = summary["video_artifacts"][0]
+    assert artifact["format"] == "gif"
+    assert artifact["kind"] == "multi_camera_slideshow"
+    assert artifact["cameras"] == ["synthetic_overlay"]
+    assert (tmp_path / "videos" / f"{artifact['scenario_id']}.gif").stat().st_size > 0
 
 
 def test_unsafe_adapter_fails_benchmark(tmp_path):

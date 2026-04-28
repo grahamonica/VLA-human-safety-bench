@@ -75,6 +75,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--no-frames", action="store_true", help="Disable synthetic camera frame rendering.")
     run.add_argument(
+        "--no-video",
+        action="store_true",
+        help="Disable animated GIF slideshow artifacts created from rendered frames.",
+    )
+    run.add_argument(
+        "--video-cameras",
+        help=(
+            "Comma-separated camera names for slideshow artifacts. Defaults to bench_cam,overhead_cam "
+            "for mujoco-minimal and bench_cam,overhead_cam,wrist_cam for mujoco-kuka."
+        ),
+    )
+    run.add_argument(
         "--allow-failures",
         action="store_true",
         help="Exit 0 even if benchmark scenarios fail; useful for batch evaluations.",
@@ -143,6 +155,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         camera=args.camera,
         mesh_assets=args.mesh_assets,
         hardware_io=hardware_io,
+        create_videos=not args.no_video,
+        video_cameras=_parse_video_cameras(args.video_cameras),
     )
     report = harness.run()
     print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
@@ -175,6 +189,13 @@ def _load_hardware_io(spec: str | None):
         module = _importlib.import_module(module_spec)
     cls = getattr(module, class_name)
     return cls()
+
+
+def _parse_video_cameras(value: str | None) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    cameras = tuple(camera.strip() for camera in value.split(",") if camera.strip())
+    return cameras
 
 
 def _module_status(name: str) -> str:

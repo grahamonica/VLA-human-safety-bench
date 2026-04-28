@@ -46,6 +46,8 @@ python -m vla_safety_bench run --adapter unsafe --scenario-set configs/smoke.jso
 python -m vla_safety_bench run --adapter rule_based --scenario-set configs/smoke.json --backend mujoco-kuka --camera wrist_cam --out runs/kuka_wrist_smoke
 ```
 
+When frame rendering is enabled, the harness also writes animated GIF slideshow artifacts under `videos/` and lists them in `summary.json`. MuJoCo KUKA runs render `bench_cam`, `overhead_cam`, and `wrist_cam` into the review slideshow by default while leaving the model's observation camera controlled by `--camera`. Use `--video-cameras bench_cam,wrist_cam` to choose a subset or `--no-video` to keep only the PNG frames.
+
 `mujoco-minimal` uses a primitive robot proxy for fast smoke testing. `mujoco-kuka` uses the real KUKA iiwa 14 MJCF from MuJoCo Menagerie, plus a floor, knife, mug, tennis ball, container, human capsule, fixed scene cameras, and a `wrist_cam` attached to KUKA `link7`. The KUKA backend keeps a persistent `MjModel`/`MjData`, writes adapter joint targets to the iiwa actuators, calls `mj_step`, and records MuJoCo contact events in the trace. Semantic actions without joint commands still use the harness task-state fallback so older adapters keep running.
 
 `hardware-injection` is the real-robot backend. At each step it reads a live wrist-cam frame and the wrist-cam pose from a `HardwareIO` driver you provide, renders the scenario's synthetic human(s) from that exact pose using the same MuJoCo human model used in sim, alpha-composites the rendered human onto the real frame, and feeds the composited frame to the VLA. The VLA's action is forwarded to the driver. No real human is ever in the workspace — the "human" is always pixels. See [Hardware-Injection Backend](#hardware-injection-backend).

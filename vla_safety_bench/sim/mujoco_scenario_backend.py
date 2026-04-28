@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Mapping
+from shutil import copyfile
+from typing import Any, Mapping, Sequence
 
 from vla_safety_bench.scenarios import ScenarioSpec
 from vla_safety_bench.sim.kinematic_backend import KinematicSimulation
@@ -24,6 +25,18 @@ from vla_safety_bench.sim.mujoco_backend import (
 )
 from vla_safety_bench.sim.mesh_assets import MeshAssetLibrary, load_mesh_asset_library
 from vla_safety_bench.types import JsonDict, ObjectState, Observation, RobotAction
+from vla_safety_bench.video import camera_frame_path
+
+
+def _dedupe_cameras(cameras: Sequence[str]) -> tuple[str, ...]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for camera in cameras:
+        camera_name = str(camera).strip()
+        if camera_name and camera_name not in seen:
+            ordered.append(camera_name)
+            seen.add(camera_name)
+    return tuple(ordered)
 
 
 class MujocoScenarioSimulation(KinematicSimulation):
@@ -39,6 +52,7 @@ class MujocoScenarioSimulation(KinematicSimulation):
         camera: str = "bench_cam",
         use_kuka: bool = False,
         mesh_assets: MeshAssetLibrary | str | Path | None = None,
+        video_cameras: Sequence[str] | None = None,
     ) -> None:
         super().__init__(
             scenario,
@@ -47,6 +61,7 @@ class MujocoScenarioSimulation(KinematicSimulation):
             backend_name=backend_name,
         )
         self.camera = camera
+        self.video_cameras = _dedupe_cameras(video_cameras if video_cameras is not None else [camera])
         self.use_kuka = use_kuka
         self.mesh_assets = load_mesh_asset_library(mesh_assets)
         self._mujoco_model: Any | None = None
@@ -69,8 +84,9 @@ class MujocoScenarioSimulation(KinematicSimulation):
             self._forward_mujoco()
             self._refresh_world_from_mujoco()
         image_path = None
+        camera_frames: dict[str, str] = {}
         if self.render_frames:
-            image_path = self._render_mujoco_frame(step_index)
+            image_path, camera_frames = self._render_mujoco_frames(step_index)
         return Observation(
             scenario_id=self.scenario.id,
             prompt=self.scenario.prompt,
@@ -84,6 +100,7 @@ class MujocoScenarioSimulation(KinematicSimulation):
                 "tags": self.scenario.tags,
                 "mujoco_render": image_path is not None,
                 "camera": self.camera,
+                "camera_frames": camera_frames,
                 "robot_model": "kuka_iiwa_14_menagerie" if self.use_kuka else "primitive_proxy",
                 "mesh_assets": str(self.mesh_assets.manifest_path) if self.mesh_assets else None,
                 "mujoco_physics": self.use_kuka,
@@ -123,19 +140,34 @@ class MujocoScenarioSimulation(KinematicSimulation):
             self._last_contact_events = []
         return events
 
-    def _render_mujoco_frame(self, step_index: int) -> str | None:
+    def _render_mujoco_frames(self, step_index: int) -> tuple[str | None, dict[str, str]]:
         import mujoco
 
+        legacy_frame_path = self.output_dir / "frames" / self.scenario.id / f"{step_index:03d}.png"
+        camera_frames: dict[str, str] = {}
         if self.use_kuka:
             if self._mujoco_model is None or self._mujoco_data is None:
                 raise RuntimeError("KUKA MuJoCo physics model is not initialized.")
-            frame_path = self.output_dir / "frames" / self.scenario.id / f"{step_index:03d}.png"
-            return render_scene_data_png(
+            image_path = render_scene_data_png(
                 self._mujoco_model,
                 self._mujoco_data,
-                frame_path,
+                legacy_frame_path,
                 camera=self.camera,
             )
+            for camera in self.video_cameras:
+                frame_path = camera_frame_path(self.output_dir, self.scenario.id, camera, step_index)
+                if camera == self.camera:
+                    frame_path.parent.mkdir(parents=True, exist_ok=True)
+                    copyfile(image_path, frame_path)
+                else:
+                    render_scene_data_png(
+                        self._mujoco_model,
+                        self._mujoco_data,
+                        frame_path,
+                        camera=camera,
+                    )
+                camera_frames[camera] = str(frame_path)
+            return image_path, camera_frames
 
         xml = (
             scenario_mujoco_xml(
@@ -145,13 +177,26 @@ class MujocoScenarioSimulation(KinematicSimulation):
             )
         )
         model = mujoco.MjModel.from_xml_string(xml)
-        frame_path = self.output_dir / "frames" / self.scenario.id / f"{step_index:03d}.png"
-        return render_scene_png(
+        image_path = render_scene_png(
             model,
-            frame_path,
+            legacy_frame_path,
             camera=self.camera,
             joint_positions=None,
         )
+        for camera in self.video_cameras:
+            frame_path = camera_frame_path(self.output_dir, self.scenario.id, camera, step_index)
+            if camera == self.camera:
+                frame_path.parent.mkdir(parents=True, exist_ok=True)
+                copyfile(image_path, frame_path)
+            else:
+                render_scene_png(
+                    model,
+                    frame_path,
+                    camera=camera,
+                    joint_positions=None,
+                )
+            camera_frames[camera] = str(frame_path)
+        return image_path, camera_frames
 
     def _initialize_kuka_physics(self) -> None:
         import mujoco

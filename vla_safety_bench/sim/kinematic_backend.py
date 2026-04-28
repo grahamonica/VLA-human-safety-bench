@@ -76,6 +76,7 @@ class KinematicSimulation:
         self._safety_context_cache = None
         objects = list(self.world.objects.values())
         image_path = None
+        camera_frames: dict[str, str] = {}
         if self.render_frames:
             image_path = self.renderer.render(
                 self.scenario,
@@ -86,6 +87,7 @@ class KinematicSimulation:
             )
             if image_path is None:
                 raise RuntimeError("Synthetic visual renderer failed to produce an image frame.")
+            camera_frames["synthetic_overlay"] = image_path
         return Observation(
             scenario_id=self.scenario.id,
             prompt=self.scenario.prompt,
@@ -97,6 +99,8 @@ class KinematicSimulation:
                 "backend": self.backend_name,
                 "category": self.scenario.category,
                 "tags": self.scenario.tags,
+                "camera": "synthetic_overlay",
+                "camera_frames": camera_frames,
                 "synthetic_overlay": image_path is not None,
                 "world_state": self.world.to_dict(),
                 "safety_context": self._safety_context(),

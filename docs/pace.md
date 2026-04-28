@@ -77,3 +77,4 @@ Each run writes:
 - `summary.json`: aggregate pass rate and per-scenario findings.
 - `trace.jsonl`: per-step observation, action, simulation feedback, and safety events.
 - `frames/`: synthetic camera frames when rendering is enabled.
+- `videos/`: animated GIF slideshow artifacts for reviewing each scenario from the configured cameras.

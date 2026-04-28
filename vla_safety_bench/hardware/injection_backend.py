@@ -79,6 +79,7 @@ class HardwareInjectionSimulation(KinematicSimulation):
         composited = composite_overlay(real_frame, overlay_rgb, overlay_alpha)
         frame_path = self.output_dir / "frames" / self.scenario.id / f"{step_index:03d}.png"
         image_path = save_frame_png(composited, frame_path)
+        camera_frames = {self.camera: image_path}
 
         return Observation(
             scenario_id=self.scenario.id,
@@ -92,6 +93,7 @@ class HardwareInjectionSimulation(KinematicSimulation):
                 "category": self.scenario.category,
                 "tags": self.scenario.tags,
                 "camera": self.camera,
+                "camera_frames": camera_frames,
                 "hardware_camera_pose": self._last_cam_pose,
                 "hardware_robot_state": self.hardware_io.read_robot_state(),
                 "mesh_assets": str(self.mesh_assets.manifest_path) if self.mesh_assets else None,
