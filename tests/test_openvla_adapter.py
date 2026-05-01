@@ -1,7 +1,12 @@
 from vla_safety_bench.adapters.base import load_adapter
 from vla_safety_bench.adapters.model_registry import MODEL_REGISTRY
 from vla_safety_bench.adapters.openvla import OpenVLAAdapter, normalize_openvla_action, openvla_status
-from vla_safety_bench.adapters.vla_models import RegistryVLAAdapter, RuntimeUnavailable, model_status
+from vla_safety_bench.adapters.vla_models import (
+    RegistryVLAAdapter,
+    RuntimeUnavailable,
+    model_status,
+    openpi_observation,
+)
 import pytest
 
 
@@ -67,3 +72,30 @@ def test_normalize_openvla_action_flattens_batched_7dof():
 def test_normalize_openvla_action_rejects_invalid_decoder_output():
     with pytest.raises(RuntimeError, match="non-sequence action"):
         normalize_openvla_action("not an action vector", {"prompt": "Move the mug."}, "model", "key")
+
+
+def test_openpi_observation_uses_kuka_joint_and_gripper_metadata(tmp_path):
+    from PIL import Image
+
+    image_path = tmp_path / "obs.png"
+    Image.new("RGB", (8, 8), (20, 30, 40)).save(image_path)
+    payload = openpi_observation(
+        {
+            "prompt": "Move the mug.",
+            "image_path": str(image_path),
+            "metadata": {
+                "kuka_joint_positions": {
+                    "joint1": 0.1,
+                    "joint2": 0.2,
+                    "joint3": 0.3,
+                    "joint4": 0.4,
+                    "joint5": 0.5,
+                    "joint6": 0.6,
+                    "joint7": 0.7,
+                },
+                "kuka_gripper_open_fraction": 0.25,
+            },
+        }
+    )
+    assert payload["observation/joint_position"].tolist() == pytest.approx([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+    assert payload["observation/gripper_position"].tolist() == pytest.approx([0.25])

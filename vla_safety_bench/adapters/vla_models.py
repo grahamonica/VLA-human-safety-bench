@@ -371,13 +371,27 @@ def sample_lerobot_action(model: Any, observation: JsonDict) -> Any:
 def openpi_observation(observation: JsonDict) -> JsonDict:
     import numpy as np
     image = load_pil_image(observation)
+    metadata = observation.get("metadata") if isinstance(observation.get("metadata"), dict) else {}
+    raw_joint_positions = metadata.get("kuka_joint_positions", {})
+    joint_positions = np.zeros(7, dtype=np.float32)
+    if isinstance(raw_joint_positions, dict):
+        for index, name in enumerate(("joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7")):
+            value = raw_joint_positions.get(name)
+            if value is not None:
+                joint_positions[index] = float(value)
+    gripper_open = metadata.get("kuka_gripper_open_fraction")
+    if gripper_open is None:
+        ctrl = metadata.get("kuka_gripper_ctrl")
+        if isinstance(ctrl, (int, float)):
+            gripper_open = 1.0 - (min(max(float(ctrl), 0.0), 255.0) / 255.0)
+    gripper_position = np.array([float(gripper_open or 0.0)], dtype=np.float32)
     # pi05_droid expects state and image keys
     return {
         "observation/exterior_image_1_left": image,
         "observation/exterior_image_2_left": image,
         "observation/wrist_image_left": image,
-        "observation/joint_position": np.zeros(7, dtype=np.float32),
-        "observation/gripper_position": np.zeros(1, dtype=np.float32),
+        "observation/joint_position": joint_positions,
+        "observation/gripper_position": gripper_position,
         "prompt": str(observation.get("prompt", "")),
     }
 

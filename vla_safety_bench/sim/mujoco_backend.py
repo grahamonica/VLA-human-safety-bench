@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+import xml.etree.ElementTree as ET
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -15,10 +17,14 @@ BENCH_CAM_TARGET: Vector3 = (0.85, 0.0, 0.35)
 OVERHEAD_CAM_POS: Vector3 = (0.80, 0.0, 4.20)
 OVERHEAD_CAM_TARGET: Vector3 = (0.80, 0.0, 0.0)
 KUKA_JOINT_NAMES = ("joint1", "joint2", "joint3", "joint4", "joint5", "joint6", "joint7")
+KUKA_GRIPPER_ACTUATOR = "robotiq_fingers_actuator"
+KUKA_TOOL_SITE_NAME = "gripper_tcp_site"
+# Home joints keep the flange above the bench with a forward/down approach so
+# the mounted 2F-85 gripper and wrist camera start with workspace visibility.
 KUKA_HOME_JOINT_POSITIONS = dict(
     zip(
         KUKA_JOINT_NAMES,
-        (0.0, 0.62, 0.0, -1.45, 0.0, 1.12, 0.0),
+        (0.0, 0.30, 0.0, -1.20, 0.0, 1.30, 0.0),
         strict=True,
     )
 )
@@ -48,38 +54,41 @@ def kuka_scenario_mujoco_xml(
     root = menagerie_root or default_asset_root()
     kuka_dir = root / "kuka_iiwa_14"
     iiwa_xml = kuka_dir / "iiwa14.xml"
-    assets_dir = kuka_dir / "assets"
+    iiwa_assets_dir = kuka_dir / "assets"
+    gripper_dir = root / "robotiq_2f85_v4"
+    gripper_xml = gripper_dir / "2f85.xml"
+    gripper_assets_dir = gripper_dir / "assets"
     if not iiwa_xml.exists():
         raise FileNotFoundError(
             f"Missing KUKA Menagerie model at {iiwa_xml}. Run scripts/fetch_mujoco_kuka.py first."
         )
+    if not gripper_xml.exists():
+        raise FileNotFoundError(
+            f"Missing Robotiq gripper model at {gripper_xml}. "
+            "Run scripts/fetch_mujoco_kuka.py first."
+        )
 
-    xml = iiwa_xml.read_text(encoding="utf-8")
-    xml = xml.replace(
-        '<compiler angle="radian" meshdir="assets" autolimits="true"/>',
-        f'<compiler angle="radian" meshdir="{assets_dir}" autolimits="true"/>',
+    model_root = ET.fromstring(iiwa_xml.read_text(encoding="utf-8"))
+    compiler = model_root.find("compiler")
+    if compiler is None:
+        raise ValueError("KUKA Menagerie model is missing <compiler>.")
+    compiler.set("meshdir", str(iiwa_assets_dir))
+
+    asset = model_root.find("asset")
+    if asset is None:
+        raise ValueError("KUKA Menagerie model is missing <asset>.")
+    asset.append(_element("material", {"name": "floor_mat", "rgba": "0.75 0.77 0.78 1"}))
+    _append_mesh_assets(asset, mesh_library)
+
+    _inject_robotiq_gripper(
+        model_root=model_root,
+        gripper_xml_path=gripper_xml,
+        gripper_assets_dir=gripper_assets_dir,
     )
-    xml = xml.replace(
-        "    <material class=\"iiwa\" name=\"orange\" rgba=\"1 0.423529 0.0392157 1\"/>\n",
-        """    <material class="iiwa" name="orange" rgba="1 0.423529 0.0392157 1"/>
-    <material name="floor_mat" rgba="0.75 0.77 0.78 1"/>
-""",
-    )
-    mesh_asset_xml = _mesh_asset_xml(mesh_library)
-    if mesh_asset_xml:
-        xml = xml.replace("  </asset>", mesh_asset_xml + "\n  </asset>", 1)
-    xml = xml.replace(
-        '                    <site pos="0 0 0.045" name="attachment_site"/>',
-        """                    <site pos="0 0 0.045" name="attachment_site"/>
-                    <body name="wrist_camera_mount" pos="0.20 0 0.08" euler="0 0 1.570796">
-                      <geom name="wrist_camera_body" type="box" size="0.025 0.018 0.014" rgba="0.02 0.02 0.02 1" contype="0" conaffinity="0"/>
-                      <camera name="wrist_cam" pos="0 0 0.08" euler="0 3.141592654 0" fovy="92"/>
-                    </body>""",
-    )
-    scene_xml = _shared_world_xml(objects, humans, mesh_assets=mesh_library)
-    xml = xml.replace("  </worldbody>", scene_xml + "\n  </worldbody>", 1)
-    xml = xml.replace('mujoco model="iiwa14"', 'mujoco model="vla_human_safety_kuka"')
-    return xml
+    _attach_wrist_camera(model_root)
+    _append_scene_worldbody(model_root, objects=objects, humans=humans, mesh_assets=mesh_library)
+    model_root.set("model", "vla_human_safety_kuka")
+    return ET.tostring(model_root, encoding="unicode")
 
 
 def kuka_xml_from_spec(
@@ -360,6 +369,207 @@ def _actuator_id_for_joint(model: Any, joint_id: int) -> int | None:
     return None
 
 
+def set_gripper_control(model: Any, data: Any, value: float) -> float:
+    import mujoco
+
+    actuator_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, KUKA_GRIPPER_ACTUATOR)
+    if actuator_id < 0:
+        raise ValueError(f"MuJoCo model is missing actuator {KUKA_GRIPPER_ACTUATOR!r}.")
+    target = float(value)
+    if model.actuator_ctrllimited[actuator_id]:
+        low, high = model.actuator_ctrlrange[actuator_id]
+        target = min(max(target, float(low)), float(high))
+    data.ctrl[actuator_id] = target
+    return target
+
+
+def read_gripper_control(model: Any, data: Any) -> float | None:
+    import mujoco
+
+    actuator_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, KUKA_GRIPPER_ACTUATOR)
+    if actuator_id < 0:
+        return None
+    return float(data.ctrl[actuator_id])
+
+
+def _inject_robotiq_gripper(*, model_root: ET.Element, gripper_xml_path: Path, gripper_assets_dir: Path) -> None:
+    gripper_root = ET.fromstring(gripper_xml_path.read_text(encoding="utf-8"))
+    _prepare_prefixed_gripper(gripper_root, prefix="robotiq_", gripper_assets_dir=gripper_assets_dir)
+
+    asset = model_root.find("asset")
+    if asset is None:
+        raise ValueError("KUKA Menagerie model is missing <asset>.")
+    gripper_asset = gripper_root.find("asset")
+    if gripper_asset is not None:
+        for child in gripper_asset:
+            asset.append(deepcopy(child))
+
+    for gripper_default in gripper_root.findall("default"):
+        model_root.append(deepcopy(gripper_default))
+
+    contact = model_root.find("contact")
+    if contact is None:
+        contact = ET.SubElement(model_root, "contact")
+    gripper_contact = gripper_root.find("contact")
+    if gripper_contact is not None:
+        for child in gripper_contact:
+            contact.append(deepcopy(child))
+
+    tendon = model_root.find("tendon")
+    if tendon is None:
+        tendon = ET.SubElement(model_root, "tendon")
+    gripper_tendon = gripper_root.find("tendon")
+    if gripper_tendon is not None:
+        for child in gripper_tendon:
+            tendon.append(deepcopy(child))
+
+    equality = model_root.find("equality")
+    if equality is None:
+        equality = ET.SubElement(model_root, "equality")
+    gripper_equality = gripper_root.find("equality")
+    if gripper_equality is not None:
+        for child in gripper_equality:
+            equality.append(deepcopy(child))
+
+    actuator = model_root.find("actuator")
+    if actuator is None:
+        actuator = ET.SubElement(model_root, "actuator")
+    gripper_actuator = gripper_root.find("actuator")
+    if gripper_actuator is not None:
+        for child in gripper_actuator:
+            actuator.append(deepcopy(child))
+
+    worldbody = model_root.find("worldbody")
+    if worldbody is None:
+        raise ValueError("KUKA Menagerie model is missing <worldbody>.")
+    link7 = _find_body_by_name(worldbody, "link7")
+    if link7 is None:
+        raise ValueError("KUKA Menagerie model is missing body 'link7'.")
+    gripper_body = _find_body_by_name(gripper_root.find("worldbody"), "robotiq_base")
+    if gripper_body is None:
+        raise ValueError("Robotiq model is missing body 'base'.")
+    gripper_mount = deepcopy(gripper_body)
+    # The Menagerie gripper points in +Z of its base frame. KUKA's attachment
+    # site already orients +Z toward the workspace at home, so only a 45 deg
+    # roll is needed to align finger closure with world Y.
+    gripper_mount.set("pos", "0 0 0.045")
+    gripper_mount.set("euler", "0 0 0.7853981634")
+    link7.append(gripper_mount)
+    link7.append(_element("site", {"name": KUKA_TOOL_SITE_NAME, "pos": "0 0 0.215"}))
+
+
+def _prepare_prefixed_gripper(gripper_root: ET.Element, *, prefix: str, gripper_assets_dir: Path) -> None:
+    gripper_asset = gripper_root.find("asset")
+    if gripper_asset is None:
+        raise ValueError("Robotiq model is missing <asset>.")
+
+    for mesh in gripper_asset.findall("mesh"):
+        file_name = mesh.get("file")
+        if file_name is None:
+            continue
+        mesh_name = mesh.get("name") or Path(file_name).stem
+        mesh.set("name", mesh_name)
+        mesh.set("file", str((gripper_assets_dir / Path(file_name).name).resolve()))
+
+    name_attrs = {
+        "name",
+        "class",
+        "childclass",
+        "material",
+        "mesh",
+        "texture",
+        "joint",
+        "joint1",
+        "joint2",
+        "tendon",
+        "body",
+        "body1",
+        "body2",
+    }
+    for element in gripper_root.iter():
+        for attr in name_attrs:
+            value = element.get(attr)
+            if value is None:
+                continue
+            element.set(attr, f"{prefix}{value}")
+
+
+def _attach_wrist_camera(model_root: ET.Element) -> None:
+    worldbody = model_root.find("worldbody")
+    if worldbody is None:
+        raise ValueError("KUKA Menagerie model is missing <worldbody>.")
+    link7 = _find_body_by_name(worldbody, "link7")
+    if link7 is None:
+        raise ValueError("KUKA Menagerie model is missing body 'link7'.")
+
+    mount = _element("body", {"name": "wrist_camera_mount", "pos": "0 0 0.17"})
+    # Collidable camera housing so the wrist camera cannot clip through
+    # scene objects independently of the arm links.
+    mount.append(
+        _element(
+            "geom",
+            {
+                "name": "wrist_camera_body",
+                "type": "box",
+                "size": "0.018 0.016 0.016",
+                "rgba": "0.03 0.03 0.03 1",
+                "mass": "0.02",
+                "friction": "0.8 0.02 0.001",
+            },
+        )
+    )
+    # The camera sits behind the fingers and looks along the approach vector so
+    # both pads and object contacts remain visible.
+    mount.append(
+        _element(
+            "camera",
+            {"name": "wrist_cam", "pos": "0 -0.03 0.02", "euler": "0.3 3.14159265359 0", "fovy": "110"},
+        )
+    )
+    link7.append(mount)
+
+
+def _append_mesh_assets(asset: ET.Element, mesh_assets: MeshAssetLibrary) -> None:
+    xml = _mesh_asset_xml(mesh_assets).strip()
+    if not xml:
+        return
+    container = ET.fromstring(f"<asset_fragment>{xml}</asset_fragment>")
+    for child in container:
+        asset.append(child)
+
+
+def _append_scene_worldbody(
+    model_root: ET.Element,
+    *,
+    objects: list[ObjectState],
+    humans: list[HumanState],
+    mesh_assets: MeshAssetLibrary,
+) -> None:
+    worldbody = model_root.find("worldbody")
+    if worldbody is None:
+        raise ValueError("KUKA Menagerie model is missing <worldbody>.")
+    shared = _shared_world_xml(objects, humans, mesh_assets=mesh_assets).strip()
+    fragment = ET.fromstring(f"<world_fragment>{shared}</world_fragment>")
+    for child in fragment:
+        worldbody.append(child)
+
+
+def _find_body_by_name(root: ET.Element | None, body_name: str) -> ET.Element | None:
+    if root is None:
+        return None
+    for body in root.findall(".//body"):
+        if body.get("name") == body_name:
+            return body
+    return None
+
+
+def _element(tag: str, attrib: Mapping[str, str]) -> ET.Element:
+    element = ET.Element(tag)
+    for key, value in attrib.items():
+        element.set(key, value)
+    return element
+
+
 def _shared_world_xml(
     objects: list[ObjectState],
     humans: list[HumanState],
@@ -383,15 +593,18 @@ def _object_body_xml(obj: ObjectState, mesh_assets: MeshAssetLibrary) -> str:
     mesh_spec = mesh_assets.object_spec(obj.name)
     if mesh_spec is None:
         raise ValueError(f"Missing required mesh asset for object {obj.name!r}.")
-    mesh = mesh_spec.geom_xml(
+    visual_mesh = mesh_spec.geom_xml(
         f"{obj.name}_mesh",
+        visual_only=True,
         mass=_object_mass_kg(obj.name),
         friction="0.85 0.02 0.001",
     )
+    collision_geoms = "\n".join(_object_collision_geoms_xml(obj.name))
     return f"""
     <body name="{obj.name}" pos="{x} {y} {z}">
       <freejoint name="{obj.name}_freejoint"/>
-{mesh}
+{visual_mesh}
+{collision_geoms}
     </body>""".rstrip()
 
 
@@ -415,6 +628,36 @@ def _object_mass_kg(name: str) -> float:
         "container": 0.16,
     }
     return masses.get(name, 0.10)
+
+
+def _object_collision_geoms_xml(name: str) -> list[str]:
+    # Non-convex imported meshes can have weak contacts. Keep visual meshes for
+    # rendering but use stable convex collision proxies so objects cannot be
+    # tunneled through by links, gripper, or wrist camera housing.
+    if name == "knife":
+        return [
+            '      <geom name="knife_collision" type="capsule" size="0.012 0.14" '
+            'pos="0 0 0" euler="1.57079632679 0 0" density="0" friction="0.9 0.02 0.001"/>'
+        ]
+    if name == "mug":
+        return [
+            '      <geom name="mug_collision" type="cylinder" size="0.045 0.032" '
+            'pos="0 0.045 0" euler="1.57079632679 0 0" density="0" friction="0.9 0.02 0.001"/>'
+        ]
+    if name == "container":
+        return [
+            '      <geom name="container_collision" type="box" size="0.095 0.075 0.065" '
+            'pos="0 0.074 0" euler="1.57079632679 0 0" density="0" friction="0.85 0.02 0.001"/>'
+        ]
+    if name == "tennis_ball":
+        return [
+            '      <geom name="tennis_ball_collision" type="sphere" size="0.03" '
+            'pos="0 0 0.032" density="0" friction="0.9 0.02 0.001"/>'
+        ]
+    return [
+        '      <geom name="object_collision" type="sphere" size="0.04" '
+        'density="0" friction="0.85 0.02 0.001"/>'
+    ]
 
 
 def _human_body_xml(human: HumanState, mesh_assets: MeshAssetLibrary) -> str:
@@ -521,8 +764,12 @@ class MenagerieKukaAssets:
         return self.root / "kuka_iiwa_14" / "iiwa14.xml"
 
     @property
+    def gripper_xml(self) -> Path:
+        return self.root / "robotiq_2f85_v4" / "2f85.xml"
+
+    @property
     def available(self) -> bool:
-        return self.scene_xml.exists() and self.iiwa_xml.exists()
+        return self.scene_xml.exists() and self.iiwa_xml.exists() and self.gripper_xml.exists()
 
     def compile_scene(self) -> Any:
         if not self.available:

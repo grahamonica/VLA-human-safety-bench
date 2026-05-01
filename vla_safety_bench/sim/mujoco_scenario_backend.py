@@ -9,13 +9,16 @@ from vla_safety_bench.sim.mujoco_backend import (
     KUKA_DEFAULT_PHYSICS_SUBSTEPS,
     KUKA_HOME_JOINT_POSITIONS,
     KUKA_JOINT_NAMES,
+    KUKA_TOOL_SITE_NAME,
     apply_joint_controls,
     apply_joint_positions,
     body_position,
     kuka_scenario_mujoco_xml,
+    read_gripper_control,
     read_joint_controls,
     read_joint_positions,
     render_scene_data_png,
+    set_gripper_control,
     solve_site_position_ik,
     set_mocap_body_pose,
     site_position,
@@ -67,6 +70,7 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
         self._current_step_index = 0
         self._last_contact_events: list[JsonDict] = []
         self._last_joint_targets: dict[str, float] = {}
+        self._last_gripper_target: float | None = None
         self._last_action_conversion: JsonDict | None = None
         self._robot_body_names: set[str] = set()
         self._physics_human_ids = self._all_scenario_human_ids()
@@ -100,6 +104,8 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
                 "mujoco_time_s": self._mujoco_time_s(),
                 "kuka_joint_positions": self._kuka_joint_positions(),
                 "kuka_joint_targets": self._kuka_joint_targets(),
+                "kuka_gripper_ctrl": self._kuka_gripper_control(),
+                "kuka_gripper_open_fraction": self._kuka_gripper_open_fraction(),
                 "last_action_conversion": self._last_action_conversion,
                 "world_state": self.world.to_dict(),
                 "safety_context": self._safety_context(),
@@ -195,6 +201,7 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
             self._mujoco_data,
             initial_targets,
         )
+        self._last_gripper_target = self._apply_gripper_target(0.0)
         self._sync_humans_to_mujoco()
         self._forward_mujoco()
         self._refresh_world_from_mujoco()
@@ -277,6 +284,8 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
             raise RuntimeError(
                 f"Action {action.type!r} has no KUKA joint target and no safe hold behavior."
             )
+        gripper_target = self._gripper_target_from_action(action)
+        applied_gripper = self._apply_gripper_target(gripper_target)
 
         contact_events: list[JsonDict] = []
         seen_contacts: set[tuple[str, str, str]] = set()
@@ -285,6 +294,7 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
             contact_events.extend(self._collect_contact_events(seen_contacts))
 
         self._last_joint_targets = applied_targets
+        self._last_gripper_target = applied_gripper
         self._last_contact_events = contact_events
         self._refresh_world_from_mujoco()
         return [
@@ -295,6 +305,8 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
                 "substeps": self._mujoco_substeps,
                 "joint_targets": applied_targets,
                 "joint_positions": self._kuka_joint_positions(),
+                "gripper_target": applied_gripper,
+                "gripper_ctrl": self._kuka_gripper_control(),
             }
         ]
 
@@ -305,7 +317,7 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
         if action.type in {"throw", "toss"}:
             self._last_action_conversion = {
                 "source": "projectile_command_blocked_hold",
-                "target_site": "attachment_site",
+                "target_site": KUKA_TOOL_SITE_NAME,
                 "reason": "Projectile commands are recorded for scoring but not executed in MuJoCo.",
             }
             return self._kuka_joint_positions()
@@ -326,7 +338,7 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
             targets = self._coerce_joint_mapping(absolute)
             self._last_action_conversion = {
                 "source": "native_joint_targets",
-                "target_site": "attachment_site",
+                "target_site": KUKA_TOOL_SITE_NAME,
             }
             return targets
 
@@ -346,7 +358,7 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
             targets = {name: current.get(name, 0.0) + delta for name, delta in delta_map.items()}
             self._last_action_conversion = {
                 "source": "native_joint_deltas",
-                "target_site": "attachment_site",
+                "target_site": KUKA_TOOL_SITE_NAME,
             }
             return targets
 
@@ -359,7 +371,7 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
             targets = self._ik_joint_targets(target_position)
             self._last_action_conversion = {
                 "source": "cartesian_delta_ik",
-                "target_site": "attachment_site",
+                "target_site": KUKA_TOOL_SITE_NAME,
                 "delta_m": list(cartesian_delta),
                 "target_position_m": list(target_position),
             }
@@ -370,7 +382,7 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
             targets = self._ik_joint_targets(semantic_target)
             self._last_action_conversion = {
                 "source": "semantic_target_ik",
-                "target_site": "attachment_site",
+                "target_site": KUKA_TOOL_SITE_NAME,
                 "target_position_m": list(semantic_target),
             }
             return targets
@@ -397,6 +409,48 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
             raise RuntimeError(f"Cartesian action includes non-numeric translation values: {value!r}.") from exc
         scale = 0.05
         return (dx * scale, dy * scale, dz * scale)
+
+    def _gripper_target_from_action(self, action: RobotAction) -> float | None:
+        value = self._first_raw_value(
+            action.raw,
+            (
+                "gripper",
+                "gripper_command",
+                "gripper_position",
+                "gripper_ctrl",
+                "fingers_actuator",
+            ),
+        )
+        if value is None:
+            openvla = self._first_raw_value(action.raw, ("openvla_action_7dof", "action_7dof"))
+            if isinstance(openvla, (list, tuple)) and len(openvla) >= 7:
+                value = openvla[6]
+        if value is None:
+            if action.raw.get("open_gripper") is True:
+                return 0.0
+            if action.raw.get("close_gripper") is True:
+                return 255.0
+            return self._last_gripper_target
+        return self._normalize_gripper_target(value)
+
+    def _normalize_gripper_target(self, value: Any) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(f"Gripper command must be numeric, got {value!r}.") from exc
+        if 0.0 <= number <= 1.0:
+            return number * 255.0
+        if -1.0 <= number <= 1.0:
+            # OpenVLA-style convention: +1 = open, -1 = close.
+            return ((1.0 - number) * 0.5) * 255.0
+        return number
+
+    def _apply_gripper_target(self, target: float | None) -> float | None:
+        if self._mujoco_model is None or self._mujoco_data is None:
+            return None
+        if target is None:
+            return read_gripper_control(self._mujoco_model, self._mujoco_data)
+        return set_gripper_control(self._mujoco_model, self._mujoco_data, target)
 
     def _semantic_target_position(self, action: RobotAction) -> tuple[float, float, float] | None:
         if action.type in {"move", "pick"}:
@@ -440,16 +494,16 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
         return solve_site_position_ik(
             self._mujoco_model,
             self._mujoco_data,
-            site_name="attachment_site",
+            site_name=KUKA_TOOL_SITE_NAME,
             target_position=target_position,
         )
 
     def _current_attachment_position(self) -> tuple[float, float, float]:
         if self._mujoco_model is None or self._mujoco_data is None:
             raise RuntimeError("KUKA MuJoCo physics model is not initialized.")
-        position = site_position(self._mujoco_model, self._mujoco_data, "attachment_site")
+        position = site_position(self._mujoco_model, self._mujoco_data, KUKA_TOOL_SITE_NAME)
         if position is None:
-            raise RuntimeError("KUKA model is missing attachment_site.")
+            raise RuntimeError(f"KUKA model is missing {KUKA_TOOL_SITE_NAME}.")
         return position
 
     def _first_raw_value(self, raw: Mapping[str, Any], keys: tuple[str, ...]) -> Any | None:
@@ -527,7 +581,7 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
     def _refresh_world_from_mujoco(self) -> None:
         if self._mujoco_model is None or self._mujoco_data is None:
             return
-        end_effector = site_position(self._mujoco_model, self._mujoco_data, "attachment_site")
+        end_effector = site_position(self._mujoco_model, self._mujoco_data, KUKA_TOOL_SITE_NAME)
         if end_effector is not None:
             self.world.robot.end_effector_m = end_effector
         for name, obj in list(self.world.objects.items()):
@@ -705,6 +759,18 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
             return dict(self._last_joint_targets)
         return read_joint_controls(self._mujoco_model, self._mujoco_data)
 
+    def _kuka_gripper_control(self) -> float | None:
+        if self._mujoco_model is None or self._mujoco_data is None:
+            return None
+        return read_gripper_control(self._mujoco_model, self._mujoco_data)
+
+    def _kuka_gripper_open_fraction(self) -> float | None:
+        ctrl = self._kuka_gripper_control()
+        if ctrl is None:
+            return None
+        # Robotiq actuator uses 0=open, 255=closed.
+        return round(1.0 - (min(max(ctrl, 0.0), 255.0) / 255.0), 6)
+
     def _mujoco_time_s(self) -> float:
         if self._mujoco_data is None:
             return 0.0
@@ -717,6 +783,8 @@ class MujocoScenarioSimulation(ScenarioStateSimulation):
             "substeps": self._mujoco_substeps,
             "joint_positions": self._kuka_joint_positions(),
             "joint_targets": self._kuka_joint_targets(),
+            "gripper_ctrl": self._kuka_gripper_control(),
+            "gripper_open_fraction": self._kuka_gripper_open_fraction(),
         }
 
 

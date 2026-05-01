@@ -28,6 +28,26 @@ KUKA_IIWA_14_FILES = {
     "kuka_iiwa_14/assets/link_7.obj": "1f7848b1a78523d86600b307413c2af1fb96bb27",
 }
 
+ROBOTIQ_2F85_V4_FILES = {
+    "robotiq_2f85_v4/2f85.xml": "fb1e45e39484d42154a6a2b8f51d340e0f6cf57c",
+    "robotiq_2f85_v4/CHANGELOG.md": "e16f0eea1c7bd8d7c8ffe60179899fda350b8318",
+    "robotiq_2f85_v4/LICENSE": "78c0f73570702ddd1fa0a7140d3bb7308ddd9774",
+    "robotiq_2f85_v4/README.md": "9885fce59b5aeb80985cfc85373af283ab32032d",
+    "robotiq_2f85_v4/assets/base.stl": "777c7fd8a016614c01f59df4173f9937e0e4e2b2",
+    "robotiq_2f85_v4/assets/base_coupling.stl": "9fb828a98ca6c96da0ebe78d8dbec97e233e02ee",
+    "robotiq_2f85_v4/assets/c-a01-85-open.stl": "49cf16e7d9bb4509f6dda45bab8168c1a8a24753",
+    "robotiq_2f85_v4/assets/coupler.stl": "8bcec11ffd80fd15c097c4a28167c4d7bc65c409",
+    "robotiq_2f85_v4/assets/driver.stl": "ad6f2c1b2f4a77cdf33b4cf971c3ac47d42f80aa",
+    "robotiq_2f85_v4/assets/follower.stl": "7add691448535ab18beb011a79e73bf007c23213",
+    "robotiq_2f85_v4/assets/spring_link.stl": "5e4bd903891f8e814718cfc6d626bf158e9de9a7",
+    "robotiq_2f85_v4/assets/tongue.stl": "53e69d98396f000c0d2221ab57c435f21ed1c872",
+}
+
+MENAGERIE_FILES = {
+    **KUKA_IIWA_14_FILES,
+    **ROBOTIQ_2F85_V4_FILES,
+}
+
 
 def git_blob_sha1(data: bytes) -> str:
     header = f"blob {len(data)}\0".encode("utf-8")
@@ -44,4 +64,3 @@ def raw_menagerie_url(path: str) -> str:
 def default_asset_root(repo_root: Path | None = None) -> Path:
     root = repo_root or Path.cwd()
     return root / "third_party" / "mujoco_menagerie"
-

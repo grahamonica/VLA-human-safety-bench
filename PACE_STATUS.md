@@ -1,20 +1,22 @@
 # PACE VLA Bench — Run Status
 
-**Last submitted:** Job 5104498 (April 28, 2026)
+**Last submitted:** Job 5104498 (April 28, 2026) — needs a fresh re-submission with the 2026-04-29 scene/wrist-cam/step-budget changes; see [CHANGELOG.md](CHANGELOG.md).
 **Cluster:** PACE ICE (login-ice-1.pace.gatech.edu)
 **Backend (current):** mujoco-kuka only for simulation runs. KUKA Menagerie, MuJoCo rendering, and manifest-backed object/human meshes are required; synthetic/kinematic/no-frame fallbacks have been removed.
+
+**2026-04-29 changes pending re-run:** scenarios moved to `default_max_steps: 1000` with early termination on `refuse`/`done`/`finish`/`complete` actions, wrist-cam mount + KUKA home pose retargeted so step-0 wrist-cam frames contain knife + mug + human, knife mesh euler updated to lay on its side, two safe-baseline scenarios (`safe_move_mug_left`, `safe_pick_tennis_ball`) added.
 
 ## Per-model status
 
 | # | Model | Status | Last error / outcome |
 |---|---|---|---|
-| 0 | openvla | ✅ **COMPLETED** | summary.json written; pass_rate 0.0 (model unsafely complies — expected for raw VLA without safety training; benchmark scoring works) |
-| 1 | pi0 | 🔧 PATCHED | Python 3.11 helper now uses the active PACE cache venv and reinstalls pace-base if numpy/PIL are missing |
-| 2 | octo | 🔧 PATCHED | Added `transformers>=4.36,<4.40` pin for Octo's `FlaxAutoModel` import |
-| 3 | smolvla | 🔧 PATCHED | Adapter now passes numpy `uint8` images to LeRobot instead of PIL objects |
-| 4 | nora | 🔧 PATCHED | `_to_float_list` flattens nested action batches |
-| 5 | nora15 | ✅ **COMPLETED** | summary.json written; pass_rate 0.0 |
-| 6 | bitvla | 🔧 PATCHED | Loader stages BitVLA HF snapshot locally, injects repo code files, updates `auto_map`, and sets BitVLA action constants |
+| 0 | openvla | ✅ **COMPLETED** (job 5104498) | `summary.json` written, pass_rate 0.0 (raw VLA emits 7-DoF deltas, doesn't refuse — benchmark scoring works). **Old trace still records `backend="kinematic"`; the next submission will exercise mujoco-kuka.** |
+| 1 | pi0 | 🔧 PATCHED, RE-RUN PENDING | `runs/pace_models/pi0_5104428_1/trace.jsonl` is empty — adapter crashed before step 0. Python 3.11 helper now uses the active PACE cache venv and reinstalls pace-base if numpy/PIL are missing. Expect a `summary.json` on the next submission. |
+| 2 | octo | 🔧 PATCHED, RE-RUN PENDING | No octo run directory present in `runs/pace_models/` — task array index 2 likely hit the `transformers`/`jax` import wall in 5104498. Pinned `transformers>=4.36,<4.40` and `jax[cuda12]==0.4.20`. |
+| 3 | smolvla | 🔧 PATCHED, RE-RUN PENDING | All three smolvla run dirs have empty `trace.jsonl`. Adapter now passes numpy `uint8` images to LeRobot instead of PIL objects. |
+| 4 | nora | 🔧 PATCHED, RE-RUN PENDING | `runs/pace_models/nora_5104505_5/summary.json` exists but the older `nora_5104433_5/` is empty. `_to_float_list` flattens nested action batches. |
+| 5 | nora15 | ✅ **COMPLETED** (jobs 5104494, 5104506) | `summary.json` written; pass_rate 0.0. Same `backend="kinematic"` caveat as openvla. |
+| 6 | bitvla | 🔧 PATCHED, RE-RUN PENDING | No bitvla run directory present. Loader stages BitVLA HF snapshot locally, injects repo code files, updates `auto_map`, and sets BitVLA action constants. |
 
 TinyVLA is intentionally removed from the default Slurm array until a real `VLA_SAFETY_TINYVLA_COMMAND` is provided; the checked-in stub is still available for explicit local adapter testing.
 

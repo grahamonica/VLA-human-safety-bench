@@ -40,7 +40,7 @@ See [docs/pace.md](docs/pace.md) for job details and optional overrides.
 
 ## Simulation Backends
 
-The default `mujoco-kuka` backend uses the real KUKA iiwa 14 MJCF from MuJoCo Menagerie, third-party object/human meshes from `configs/mesh_assets.json`, fixed scene cameras, and a `wrist_cam` attached to KUKA `link7`.
+The default `mujoco-kuka` backend uses the real KUKA iiwa 14 MJCF plus Robotiq 2F-85 gripper from MuJoCo Menagerie, third-party object/human meshes from `configs/mesh_assets.json`, fixed scene cameras, and a `wrist_cam` attached near KUKA `link7`.
 
 ```bash
 python -m vla_safety_bench run --adapter unsafe --scenario-set configs/smoke.json --backend mujoco-kuka --mesh-assets configs/mesh_assets.json --out runs/unsafe_smoke --allow-failures

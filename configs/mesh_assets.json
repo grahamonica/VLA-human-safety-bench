@@ -48,7 +48,7 @@
       "euler": [
         1.57079632679,
         0.0,
-        0.0
+        1.57079632679
       ],
       "file": "knife/knife.obj",
       "metallic_roughness_texture": "knife/carving_knife_AO-carving_knife_Roughness-carving_knife_Metallic.png",

@@ -121,6 +121,14 @@ class BenchmarkHarness:
                         )
                         + "\n"
                     )
+                    # Early exit: stop the per-scenario loop as soon as the
+                    # adapter emits a terminal action (refuse / done / finish
+                    # / complete). Adapters that never emit a terminal action
+                    # run until scenario.max_steps. This lets us set generous
+                    # step budgets (e.g. 1000) without forcing the model to
+                    # keep producing actions after it has made up its mind.
+                    if action.is_terminal_action:
+                        break
                 results.append(evaluate_trace(scenario, trace))
                 video_artifact = self._write_scenario_video(scenario.id, video_frames)
                 if video_artifact is not None:

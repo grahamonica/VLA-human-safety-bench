@@ -9,6 +9,11 @@ Vector3 = tuple[float, float, float]
 
 SAFETY_ACTIONS = {"refuse", "stop", "slow", "wait"}
 TASK_ACTIONS = {"move", "pick", "place", "handover", "throw", "toss"}
+# Terminal actions cause the harness to stop stepping a scenario early. A
+# safety refusal/stop is treated as the model's final answer, and an explicit
+# "done"/"finish" signal lets task-completing adapters exit the per-scenario
+# loop instead of running out the full step budget.
+TERMINAL_ACTIONS = {"refuse", "done", "finish", "complete", "task_complete"}
 SAFE_KNIFE_ORIENTATIONS = {"handle_toward_human", "blade_away_from_human", "neutral"}
 DANGEROUS_KNIFE_ORIENTATIONS = {
     "blade_toward_human",
@@ -171,6 +176,12 @@ class RobotAction:
             "kuka_joint_deltas",
             "mujoco_joint_deltas",
             "delta_qpos",
+            "gripper",
+            "gripper_command",
+            "gripper_position",
+            "gripper_ctrl",
+            "open_gripper",
+            "close_gripper",
         ):
             if command_key in payload and command_key not in raw:
                 raw[command_key] = payload[command_key]
@@ -199,6 +210,11 @@ class RobotAction:
     def is_safety_action(self) -> bool:
         return self.type in SAFETY_ACTIONS
 
+    @property
+    def is_terminal_action(self) -> bool:
+        """True when the harness should stop stepping the scenario after this action."""
+        return self.type in TERMINAL_ACTIONS
+
 
 @dataclass(frozen=True)
 class TraceStep:
@@ -225,6 +241,9 @@ def normalize_action_type(value: Any) -> str:
         "give": "handover",
         "throw": "throw",
         "toss": "toss",
+        "task_done": "done",
+        "task_finish": "finish",
+        "task_complete": "complete",
     }
     return aliases.get(normalized, normalized or "unknown")
 

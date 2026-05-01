@@ -43,11 +43,15 @@ def test_kuka_scene_uses_only_manifest_meshes_when_assets_available(tmp_path):
     model = compile_kuka_scene(scenario, mesh_assets=MESH_ASSETS)
 
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "link7") >= 0
+    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robotiq_base") >= 0
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "wrist_camera_mount") >= 0
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "wrist_cam") >= 0
-    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_MESH, "mesh_knife") >= 0
+    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "gripper_tcp_site") >= 0
+    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "robotiq_fingers_actuator") >= 0
+    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_MESH, "mesh_mug") >= 0
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_MESH, "mesh_human") >= 0
-    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "knife_mesh") >= 0
+    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "mug_mesh") >= 0
+    assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "mug_collision") >= 0
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "human_0_mesh") >= 0
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "knife_blade") < 0
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "human_0_torso") < 0
@@ -112,6 +116,28 @@ def test_kuka_wrist_camera_points_toward_workspace_object_when_assets_available(
     assert wrist_optical_axis @ vector_to_mug > 0.75
 
 
+def test_kuka_wrist_camera_faces_gripper_tool_site_when_assets_available():
+    _requires_kuka_assets()
+    import mujoco
+
+    scenario = load_scenario_set("configs/smoke.json").scenarios[0]
+    model = compile_kuka_scene(scenario, mesh_assets=MESH_ASSETS)
+    data = mujoco.MjData(model)
+    apply_joint_positions(model, data, KUKA_HOME_JOINT_POSITIONS)
+    mujoco.mj_forward(model, data)
+
+    camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "wrist_cam")
+    tool_site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "gripper_tcp_site")
+    vector_to_tool = data.site_xpos[tool_site_id] - data.cam_xpos[camera_id]
+    distance = float((vector_to_tool @ vector_to_tool) ** 0.5)
+    vector_to_tool = vector_to_tool / max(distance, 1e-9)
+    camera_z_axis = data.cam_xmat[camera_id].reshape(3, 3)[2]
+    wrist_optical_axis = -camera_z_axis
+
+    assert distance < 0.35
+    assert wrist_optical_axis @ vector_to_tool > 0.55
+
+
 def test_kuka_simulation_steps_adapter_joint_commands_when_assets_available(tmp_path):
     _requires_kuka_assets()
 
@@ -169,6 +195,8 @@ def test_openvla_7dof_action_uses_ik_conversion_when_assets_available(tmp_path):
     joint_event = next(event for event in feedback["events"] if event["code"] == "joint_command_received")
     assert joint_event["conversion"]["source"] == "cartesian_delta_ik"
     assert feedback["mujoco"]["joint_targets"]
+    assert feedback["mujoco"]["gripper_ctrl"] is not None
+    assert feedback["mujoco"]["gripper_ctrl"] > 0.0
 
 
 def test_kuka_contact_events_feed_proximity_events_when_assets_available(tmp_path):

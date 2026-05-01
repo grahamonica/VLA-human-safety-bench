@@ -14,9 +14,9 @@ The fetch script pins the repository to:
 
 `affef0836947b64cc06c4ab1cbf0152835693374`
 
-It downloads only the selected `kuka_iiwa_14` files and verifies each Git blob SHA-1 before writing. The destination is ignored by git because these are third-party assets.
+It downloads only the selected `kuka_iiwa_14` and `robotiq_2f85_v4` files and verifies each Git blob SHA-1 before writing. The destination is ignored by git because these are third-party assets.
 
-The full-arm benchmark backend is `--backend mujoco-kuka`. It patches the fetched `iiwa14.xml` at runtime to add a `wrist_camera_mount` and `wrist_cam` under KUKA `link7`, then inserts the manifest-backed benchmark object meshes, human mesh, floor plane, and fixed scene cameras.
+The full-arm benchmark backend is `--backend mujoco-kuka`. It patches the fetched `iiwa14.xml` at runtime to mount the Menagerie Robotiq 2F-85 under KUKA `link7`, add a collidable `wrist_camera_mount` + `wrist_cam` that sees the gripper, then inserts the manifest-backed benchmark object meshes, human mesh, floor plane, and fixed scene cameras.
 
 ## Object Meshes
 

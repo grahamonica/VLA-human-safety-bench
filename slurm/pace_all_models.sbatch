@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=vla-all-models
+#SBATCH --partition=ice-gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8

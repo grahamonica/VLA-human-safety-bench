@@ -13,7 +13,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from vla_safety_bench.assets import (
-    KUKA_IIWA_14_FILES,
+    MENAGERIE_FILES,
     MENAGERIE_COMMIT,
     MENAGERIE_LICENSE,
     MENAGERIE_REPO,
@@ -44,7 +44,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Fetch pinned MuJoCo Menagerie KUKA iiwa 14 assets.")
+    parser = argparse.ArgumentParser(
+        description="Fetch pinned MuJoCo Menagerie KUKA iiwa 14 + Robotiq 2F-85 assets."
+    )
     parser.add_argument("--dest", default=None, help="Destination root. Default: third_party/mujoco_menagerie")
     parser.add_argument("--dry-run", action="store_true", help="Download and verify without writing files.")
     parser.add_argument("--verify-only", action="store_true", help="Verify files already present at destination.")
@@ -52,7 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def fetch(dest: Path, *, dry_run: bool = False) -> int:
-    for relative_path, expected_sha in KUKA_IIWA_14_FILES.items():
+    for relative_path, expected_sha in MENAGERIE_FILES.items():
         url = raw_menagerie_url(relative_path)
         data = _download(url)
         actual_sha = git_blob_sha1(data)
@@ -75,7 +77,7 @@ def fetch(dest: Path, *, dry_run: bool = False) -> int:
 def verify_existing(dest: Path) -> int:
     missing: list[str] = []
     mismatched: list[str] = []
-    for relative_path, expected_sha in KUKA_IIWA_14_FILES.items():
+    for relative_path, expected_sha in MENAGERIE_FILES.items():
         target = dest / relative_path
         if not target.exists():
             missing.append(relative_path)
@@ -89,7 +91,7 @@ def verify_existing(dest: Path) -> int:
         for path in mismatched:
             print(f"hash mismatch {path}", file=sys.stderr)
         return 1
-    print(f"verified {len(KUKA_IIWA_14_FILES)} files")
+    print(f"verified {len(MENAGERIE_FILES)} files")
     return 0
 
 
